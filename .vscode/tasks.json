@@ -2,9 +2,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "build",
+      "label": "build debug",
       "type": "shell",
-      "command": "./compile.sh",
+      "command": "./compile_debug.sh",
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": ["$gcc"],
       "group": { "kind": "build", "isDefault": true }
