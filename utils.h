@@ -58,6 +58,18 @@ inline void matVecMult(double A[4][4], struct point3D *pt)
  memcpy(pt,&pr,4*sizeof(double));
 }
 
+inline void matTranspose(double A[4][4], double At[4][4])
+{
+ // Computes the transpose At=A^T. The result is written to At so
+ // that A is left unchanged (e.g. so obj->Tinv isn't overwritten).
+ // A and At must not be the same matrix.
+ int i,j;
+
+ for (i=0;i<4;i++)
+  for (j=0;j<4;j++)
+   At[i][j]=A[j][i];
+}
+
 // Matrix manipulation - Mind the fact that these functions will change the matrix T - for hierarchical objects you will
 // need to be careful to make local copies for manipulation where needed.
 void invert(double *T, double *Tinv);

@@ -91,10 +91,11 @@ inline void rayTransform(struct ray3D *ray_orig, struct ray3D *ray_transformed, 
 {
  // Transforms a ray using the inverse transform for the specified object. This is so that we can
  // use the intersection test for the canonical object. Note that this has to be done carefully!
-
- ///////////////////////////////////////////
- // TO DO: Complete this function
- ///////////////////////////////////////////
+ *ray_transformed = *ray_orig; // Copies p0, d, and the rayPos function pointer
+ matVecMult(obj->Tinv, &ray_transformed->p0);
+ ray_transformed->d.pw = 0; // w=0 so the translation in Tinv doesn't apply to the direction
+ matVecMult(obj->Tinv, &ray_transformed->d);
+ ray_transformed->d.pw = 1; // Restore the codebase convention of w=1
 }
 
 inline void normalTransform(struct point3D *n_orig, struct point3D *n_transformed, struct object3D *obj)
@@ -102,10 +103,12 @@ inline void normalTransform(struct point3D *n_orig, struct point3D *n_transforme
  // Computes the normal at an affinely transformed point given the original normal and the
  // object's inverse transformation. From the notes:
  // n_transformed=A^-T*n normalized.
-
- ///////////////////////////////////////////
- // TO DO: Complete this function
- ///////////////////////////////////////////
+ *n_transformed = *n_orig;
+ double TinvT[4][4];
+ matTranspose(obj->Tinv, TinvT);
+ matVecMult(TinvT, n_transformed);
+ n_transformed->pw = 1;	// The transpose moved Tinv's translation into the bottom row, so pw is junk here
+ normalize(n_transformed);
 }
 
 /////////////////////////////////////////////
