@@ -310,7 +310,30 @@ int main(int argc, char *argv[])
     // TO DO - complete the code that should be in this loop to do the
     //         raytracing!
     ///////////////////////////////////////////////////////////////////
+    // Pixel position on the image plane, in camera coordinates, converted to world coordinates
+    pc.px = cam->wl + i * du;
+    pc.py = cam->wt + j * dv;
+    pc.pz = cam->f;
+    pc.pw = 1;
+    matVecMult(cam->C2W, &pc);
 
+    // Unit direction from the camera center through the pixel
+    d = pc;
+    subVectors(&e, &d);
+    normalize(&d);
+    initRay(&ray, &e, &d);
+
+    rayTrace(&ray, 1, &col, NULL);
+
+    // Negative colour means nothing was hit (or max depth reached), so use the background
+    if (col.R < 0)
+      col = background;
+
+    // Clamp to [0,1] and store as 8-bit RGB. Pixels are row-major, 3 bytes per pixel.
+    int idx = 3 * (j * sx + i);
+    rgbIm[idx + 0] = (unsigned char)(255 * fmin(1, fmax(0, col.R)));
+    rgbIm[idx + 1] = (unsigned char)(255 * fmin(1, fmax(0, col.G)));
+    rgbIm[idx + 2] = (unsigned char)(255 * fmin(1, fmax(0, col.B)));
   } // end for i
  } // end for j
 
