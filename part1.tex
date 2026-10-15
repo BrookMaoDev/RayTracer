@@ -1,0 +1,365 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{algpseudocode}
+
+\newcommand{\vect}[1]{\mathbf{#1}}
+
+\title{CSC D18 -- Assignment 2, Part 1: Projection Mapping}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section*{Question 1}
+
+\paragraph{Setup.}
+The observer camera is at the world origin, $\vect{e} = (0,0,0)$. Let $\vect{g}$ be the
+camera's gaze direction, $\vect{t}$ its up vector, and $f > 0$ its focal length (these
+are not specified in the question, so we keep them general). The sphere has center
+$\vect{c} = (c_x, c_y, c_z)$ and radius $r$.
+
+\paragraph{Camera coordinate frame.}
+\begin{align*}
+  \vect{w} &= -\frac{\vect{g}}{\lVert \vect{g} \rVert}, &
+  \vect{u} &= \frac{\vect{t} \times \vect{w}}{\lVert \vect{t} \times \vect{w} \rVert}, &
+  \vect{v} &= \vect{w} \times \vect{u}.
+\end{align*}
+
+\paragraph{Pixel location in camera coordinates.}
+The image plane window has size $2$ in both $x$ and $y$, and the image is
+$500 \times 500$ pixels, so each pixel has width and height $\frac{2}{500} = \frac{1}{250}$.
+The left edge of the window is at $x = -1$ and the top edge is at $y = 1$. Following
+the convention in the lecture notes, $i, j \in \{0, 1, \dots, 499\}$, and we take the
+location of pixel $(i,j)$ to be its top-left corner:
+\[
+  x = -1 + \frac{i}{250}, \qquad y = 1 - \frac{j}{250},
+\]
+The image plane lies a distance $f$ from the camera along the gaze direction. Since
+$\vect{w}$ points opposite to $\vect{g}$, the image plane is at $w = -f$ in camera
+coordinates. In homogeneous camera coordinates, the pixel is
+\[
+  \vect{p}_c = \begin{bmatrix} -1 + \frac{i}{250} \\[2pt] 1 - \frac{j}{250} \\[2pt] -f \\ 1 \end{bmatrix}.
+\]
+
+\paragraph{Converting to world coordinates.}
+The camera-to-world transformation matrix is
+\[
+  M_{cw} =
+  \begin{bmatrix}
+    u_x & v_x & w_x & e_x \\
+    u_y & v_y & w_y & e_y \\
+    u_z & v_z & w_z & e_z \\
+    0   & 0   & 0   & 1
+  \end{bmatrix}
+  =
+  \begin{bmatrix}
+    u_x & v_x & w_x & 0 \\
+    u_y & v_y & w_y & 0 \\
+    u_z & v_z & w_z & 0 \\
+    0   & 0   & 0   & 1
+  \end{bmatrix},
+\]
+since $\vect{e} = \vect{0}$. The pixel in world coordinates is then
+\[
+  \vect{p}_w = M_{cw}\, \vect{p}_c.
+\]
+
+\paragraph{Ray through the pixel.}
+The ray starts at $\vect{e}$ with direction $\vect{d} = \vect{p}_w - \vect{e} = \vect{p}_w$.
+Since $\vect{e} = \vect{0}$, the ray is simply
+\[
+  \vect{r}(\lambda) = \lambda \vect{d}.
+\]
+
+\paragraph{Ray--sphere intersection.}
+The ray hits the sphere when
+\[
+  \lVert \lambda \vect{d} - \vect{c} \rVert = r.
+\]
+From the lecture notes, the solutions are
+\[
+  \lambda = -\frac{B}{A} \pm \frac{\sqrt{D}}{A},
+\]
+where
+\begin{align*}
+  A &= \vect{d} \cdot \vect{d}, &
+  B &= -\vect{c} \cdot \vect{d}, &
+  C &= \vect{c} \cdot \vect{c} - r^2, &
+  D &= B^2 - AC.
+\end{align*}
+If $D < 0$ there is no intersection. Otherwise, take $\lambda^*$ to be the smallest
+positive solution, since only points in front of the camera can be seen. Plugging it back into the
+ray equation gives
+\[
+  \vect{i} = \lambda^* \vect{d},
+\]
+the first intersection point between the ray and the sphere. This is the location on the
+projection surface that produces the colour seen by the camera at pixel $(i,j)_{\text{cam}}$.
+
+\section*{Question 2}
+
+In Question 1 we converted from camera coordinates to world coordinates. Here we go the
+other way, from world coordinates to the coordinates of the projector, which acts as a
+camera. We assume the projector's image plane has the same window size ($2 \times 2$)
+and resolution ($500 \times 500$ pixels) as the observer camera's, since the question does
+not specify them.
+
+\paragraph{Projector coordinate frame.}
+The projector is gazing at the center of the sphere, so its gaze direction is
+\[
+  \vect{g}_p = \vect{c} - \vect{e}_p.
+\]
+The projector's frame $\vect{u}_p, \vect{v}_p, \vect{w}_p$ is computed from $\vect{g}_p$ and
+the up vector $\vect{t} = (0, 1, 0)$ exactly as in Question 1.
+
+\paragraph{World-to-projector transformation.}
+Let $M_{pw} = \begin{bmatrix} \vect{u}_p & \vect{v}_p & \vect{w}_p \end{bmatrix}$ be the
+$3 \times 3$ matrix whose columns are the projector's basis vectors. The full
+projector-to-world matrix has the same form as in Question 1, except that the center of
+projection is no longer at the origin:
+\[
+  \hat{M}_{pw} =
+  \begin{bmatrix}
+    M_{pw} & \vect{e}_p \\
+    \vect{0}^T & 1
+  \end{bmatrix}
+  =
+  \begin{bmatrix}
+    u_{p,x} & v_{p,x} & w_{p,x} & e_x \\
+    u_{p,y} & v_{p,y} & w_{p,y} & e_y \\
+    u_{p,z} & v_{p,z} & w_{p,z} & e_z \\
+    0       & 0       & 0       & 1
+  \end{bmatrix}.
+\]
+Since $\vect{u}_p, \vect{v}_p, \vect{w}_p$ are orthonormal, $M_{pw}$ is an orthonormal
+matrix, so its inverse is simply its transpose:
+\[
+  M_{wp} = M_{pw}^{-1} = M_{pw}^T.
+\]
+The translation must also be expressed in projector coordinates, so it becomes
+$-M_{wp}\,\vect{e}_p$. The full world-to-projector matrix is therefore
+\[
+  \hat{M}_{wp} =
+  \begin{bmatrix}
+    M_{wp} & -M_{wp}\,\vect{e}_p \\
+    \vect{0}^T & 1
+  \end{bmatrix},
+\]
+and the surface point in projector coordinates is
+\[
+  \vect{s} = \hat{M}_{wp}\, \vect{p}_s.
+\]
+
+\paragraph{Ray from the surface point to the projector.}
+In projector coordinates, the projector's center of projection is at the origin. The ray
+from $\vect{s}$ to the center of projection is therefore
+\[
+  \vect{r}_p(\mu) = \vect{s} + \mu\, \vect{d}_p, \qquad
+  \vect{d}_p = (0, 0, 0) - \vect{s} = -\vect{s}.
+\]
+
+\paragraph{Intersection with the projector's image plane.}
+The image plane's normal is $\vect{w}_p$, which we also need in projector coordinates:
+\[
+  \vect{n}_p = M_{wp}\, \vect{w}_p.
+\]
+The plane passes through $(0, 0, -f)$, so its equation is
+\[
+  \bigl(\vect{x} - (0, 0, -f)\bigr) \cdot \vect{n}_p = 0.
+\]
+Substituting the ray, we want
+\[
+  \bigl(\vect{s} + \mu\, \vect{d}_p - (0, 0, -f)\bigr) \cdot \vect{n}_p = 0,
+\]
+which holds when
+\[
+  \mu^* = \frac{\bigl((0, 0, -f) - \vect{s}\bigr) \cdot \vect{n}_p}{\vect{d}_p \cdot \vect{n}_p}.
+\]
+The point on the projector's image plane is then $\vect{q} = \vect{r}_p(\mu^*)$.
+
+\paragraph{Projection as a matrix.}
+Equivalently, the projection onto the image plane can be written as a matrix acting on
+the homogeneous point $\vect{s} = (s_x, s_y, s_z, 1)$:
+\[
+  P =
+  \begin{bmatrix}
+    1 & 0 & 0 & 0 \\
+    0 & 1 & 0 & 0 \\
+    0 & 0 & 1 & 0 \\
+    0 & 0 & -\frac{1}{f} & 0
+  \end{bmatrix},
+  \qquad
+  P\,\vect{s} =
+  \begin{bmatrix} s_x \\ s_y \\ s_z \\ -\frac{s_z}{f} \end{bmatrix}.
+\]
+The result is the same vector, except that the homogeneous coordinate is now
+$-\frac{s_z}{f}$. Dividing through by it (i.e.\ multiplying every component by
+$-\frac{f}{s_z}$) gives the projected point
+\[
+  \vect{q} = \left( -\frac{f\, s_x}{s_z},\ -\frac{f\, s_y}{s_z},\ -f \right).
+\]
+Putting everything together, the full chain of matrices taking the surface point to the
+projector's image plane is
+\[
+  P\, \hat{M}_{wp}\, \vect{p}_s,
+\]
+followed by the division by the homogeneous coordinate.
+
+\paragraph{Pixel coordinates.}
+To find the projector pixel $(i_p, j_p)$ that $\vect{q}$ falls in, we only need $q_x$ and
+$q_y$. Using the same top-left-corner convention as in Question 1, and rounding down so that
+any point inside a pixel maps to that pixel,
+\[
+  q_x = -1 + \frac{i_p}{250} \implies i_p = \bigl\lfloor (q_x + 1) \cdot 250 \bigr\rfloor,
+\]
+\[
+  q_y = 1 - \frac{j_p}{250} \implies j_p = \bigl\lfloor (1 - q_y) \cdot 250 \bigr\rfloor.
+\]
+If $i_p$ or $j_p$ falls outside the valid range $\{0, 1, \dots, 499\}$, then $\vect{q}$ is
+not in the projector's image, so there is nothing for the projector to project onto this
+surface point.
+
+\section*{Question 3}
+
+The procedure below maps every pixel in the camera's image plane to the corresponding
+pixel in the projector's image plane. It works for any projection surface, because it
+uses each object's own intersection function from the ray tracer rather than a formula
+for a specific shape.
+
+Here $\vect{e}$ is the camera's center of projection, $f_c$ is the camera's focal length,
+$\hat{M}_{cw}$ is the camera-to-world matrix from Question 1, and $\vect{e}_p$,
+$\hat{M}_{wp}$ and $P$ are the projector's center of projection, world-to-projector matrix
+and projection matrix from Question 2. \textsc{matVecMult} is the matrix--vector
+multiplication function from the starter code. \textsc{findFirstHit}$(\textit{ray})$
+is the ray tracer's function that returns the $\lambda$ and the point of the closest
+intersection between the ray and any object in the scene, with $\lambda = -1$ if the ray
+hits nothing. For the occlusion test we use every intersection between the ray and each
+object (e.g.\ both roots of the quadratic for a sphere), not only the closest one.
+$\varepsilon > 0$ is a small tolerance, and \textsc{None} indicates that no mapping can be
+constructed for the pixel.
+
+\paragraph{Mapping a single pixel.}
+
+\begin{algorithmic}[1]
+\Function{CameraToProjector}{$i, j$}
+  \State \textit{// Convert the camera pixel to world coordinates (Question 1)}
+  \State $x \gets -1 + \frac{i}{250}$
+  \State $y \gets 1 - \frac{j}{250}$
+  \State $\vect{p}_{\text{world}} \gets \textsc{matVecMult}\bigl(\hat{M}_{cw}, (x, y, -f_c, 1)\bigr)$
+  \State
+  \State \textit{// Find the surface point seen through this pixel}
+  \State $\vect{r}_c(\lambda) \gets \vect{e} + \lambda\,(\vect{p}_{\text{world}} - \vect{e})$
+  \State $(\lambda^*, \vect{x}^*) \gets \textsc{findFirstHit}(\vect{r}_c)$
+  \If{$\lambda^* = -1$}
+    \State \Return \textsc{None} \Comment{the ray hits nothing}
+  \EndIf
+  \State $\vect{p}_{\text{world}} \gets (\vect{x}^*, 1)$
+  \State
+  \State \textit{// Check that the projector's light can reach the surface point}
+  \State $\vect{r}_s(\lambda) \gets \vect{p}_{\text{world}} + \lambda\,(\vect{e}_p - \vect{p}_{\text{world}})$
+  \State \textit{// A hit blocks the light only if it lies strictly between the surface point}
+  \State \textit{// and the projector, i.e.\ $\varepsilon < \lambda < 1$ (at $\lambda = 1$ we are at $\vect{e}_p$).}
+  \State \textit{// Hits with $\lambda \le \varepsilon$ are the ray re-hitting the surface it starts on.}
+  \ForAll{objects $obj$ in the scene}
+    \ForAll{intersections $\lambda$ of $obj$ with $\vect{r}_s$}
+      \If{$\varepsilon < \lambda < 1$}
+        \State \Return \textsc{None} \Comment{something blocks the projector}
+      \EndIf
+    \EndFor
+  \EndFor
+  \State
+  \State \textit{// Convert the world point to the projector's image plane (Question 2)}
+  \State $\vect{p}_{\text{proj}} \gets \textsc{matVecMult}\bigl(P, \textsc{matVecMult}(\hat{M}_{wp}, \vect{p}_{\text{world}})\bigr)$
+  \State $\vect{p}_{\text{proj}} \gets \frac{1}{p_{\text{proj},h}}\, \vect{p}_{\text{proj}}$
+    \Comment{$p_{\text{proj},h}$ is the homogeneous coordinate}
+  \State $i_p \gets \bigl\lfloor (p_{\text{proj},x} + 1) \cdot 250 \bigr\rfloor$
+  \State $j_p \gets \bigl\lfloor (1 - p_{\text{proj},y}) \cdot 250 \bigr\rfloor$
+  \If{$i_p \notin \{0, \dots, 499\}$ \textbf{or} $j_p \notin \{0, \dots, 499\}$}
+    \State \Return \textsc{None} \Comment{outside the projector's image}
+  \EndIf
+  \State \Return $(i_p, j_p)$
+\EndFunction
+\end{algorithmic}
+
+\paragraph{Mapping every pixel.}
+
+\begin{algorithmic}[1]
+\Function{CameraToProjectorAll}{\,}
+  \State $\textit{mapping} \gets$ a $500 \times 500$ matrix
+  \For{$i = 0$ \textbf{to} $499$} \Comment{width of the image plane in pixels}
+    \For{$j = 0$ \textbf{to} $499$} \Comment{height of the image plane in pixels}
+      \State $\textit{mapping}[i][j] \gets \Call{CameraToProjector}{i, j}$
+    \EndFor
+  \EndFor
+  \State \Return \textit{mapping}
+\EndFunction
+\end{algorithmic}
+
+\section*{Question 4}
+
+Without ray tracing, we cannot compute where the projector's light lands on the surface,
+since we do not know the surface's geometry. Instead, we observe it: we project known
+patterns with the projector and record where they appear with the camera. The physical
+surface then performs the ``intersection'' for us, so the method works for a surface of
+any shape.
+
+\paragraph{The basic idea (one pixel).}
+\begin{itemize}
+  \item Light up a single projector pixel $(i, j)_p$.
+  \item Use the camera to see where the light appears. The camera pixel where it appears
+        is $(i, j)_c$.
+  \item This gives the mapping $(i, j)_p \mapsto (i, j)_c$.
+\end{itemize}
+In general, the light from one projector pixel may cover several pixels in the camera's
+image plane, so $(i, j)_p$ maps to a \emph{set} of camera pixels rather than a single one.
+
+\paragraph{Making it efficient.}
+Doing this sequentially for every projector pixel would take a long time. We could do it
+in parallel by giving each projector pixel a distinct colour and seeing where each colour
+lands in the camera's image, but there are too many pixels for this to be feasible.
+
+Instead, taking inspiration from structured light~\cite{structuredlight}, we encode rows
+and columns separately, using two separate sets of images (one for rows, one for columns).
+
+\paragraph{Choosing the colours.}
+Let $n$ be the maximum number of colours the camera can reliably tell apart.
+
+\paragraph{Removing the background.}
+Before projecting any patterns, we take a picture of the surface with the projector off.
+Then, for each pattern, we ``subtract'' this original image from the picture taken while
+the projector is projecting, so that only the light coming from the projector remains.
+
+
+\paragraph{Procedure.}
+\begin{enumerate}
+  \item \textbf{Rows.} Let $m = \lceil 500 / n \rceil$. Repeat the following $m$ times,
+        each time covering rows that were not covered previously:
+        project a picture containing $n$ different colours, one per row, and record which
+        camera pixels show each colour. Together, these give the mapping
+        \[
+          \textit{rowMapping}: \text{row in projector frame} \to
+          \text{set of pixels in camera frame}.
+        \]
+        (The camera pixels lit by one projector row need not form a row in the camera
+        frame, since the surface can bend them.)
+  \item \textbf{Columns.} Similarly, using the same process for the columns, we get
+        \[
+          \textit{colMapping}: \text{column in projector frame} \to
+          \text{set of pixels in camera frame}.
+        \]
+  \item \textbf{Combining.} Since $i$ corresponds to $x$ (the column) and $j$ to $y$
+        (the row), the camera pixels corresponding to projector pixel $(i, j)_p$ are
+        \[
+          \textit{colMapping}[i] \cap \textit{rowMapping}[j].
+        \]
+        If this intersection is empty, the light from that projector pixel does not land
+        anywhere the camera can see, so there is no mapping for $(i, j)_p$.
+\end{enumerate}
+
+\begin{thebibliography}{9}
+  \bibitem{structuredlight} Structured light video, \texttt{https://youtu.be/mSsnf5tqXnA}.
+\end{thebibliography}
+
+\end{document}
