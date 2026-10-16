@@ -130,6 +130,11 @@ void insertObject(struct object3D *o, struct object3D **list)
  }
 }
 
+static const double plane_left = -1;
+static const double plane_right = 1;
+static const double plane_bottom = -1;
+static const double plane_top = 1;
+
 struct object3D *newPlane(double ra, double rd, double rs, double rg, double r, double g, double b, double alpha, double r_index, double shiny)
 {
  // Intialize a new plane with the specified parameters:
@@ -243,10 +248,46 @@ void planeIntersect(struct object3D *plane, struct ray3D *ray, double *lambda, s
 {
  // Computes and returns the value of 'lambda' at the intersection
  // between the specified ray and the specified canonical plane.
+ struct ray3D ray_transformed;
+ struct point3D p_canonical;
+ rayTransform(ray, &ray_transformed, plane);
 
- /////////////////////////////////
- // TO DO: Complete this function.
- /////////////////////////////////
+ n->px = 0;
+ n->py = 0;
+ n->pz = 1;
+ n->pw = 1;
+
+ // Ray is (nearly) parallel to the plane, so there is no intersection
+ if (fabs(dot(&ray_transformed.d, n)) < EPSILON)
+ {
+  *lambda = -1;
+  return;
+ }
+
+ *lambda = -dot(&ray_transformed.p0, n) / dot(&ray_transformed.d, n);
+
+ // The bounds check must use the hit point on the canonical plane, not the world-space point
+ ray_transformed.rayPos(&ray_transformed, *lambda, &p_canonical);
+ if (p_canonical.px < plane_left || p_canonical.px > plane_right || p_canonical.py < plane_bottom || p_canonical.py > plane_top)
+ {
+  *lambda = -1;
+  return;
+ }
+
+ // Texture coordinates in [0,1], the inverse of the mapping in planeCoordinates
+ *a = (p_canonical.px - plane_left) / (plane_right - plane_left);
+ *b = (p_canonical.py - plane_bottom) / (plane_top - plane_bottom);
+
+ ray->rayPos(ray, *lambda, p);
+ normalTransform(n, n, plane);
+
+ // If both sides should be lit, make the normal face the side the ray came from
+ if (plane->frontAndBack && dot(n, &ray->d) > 0)
+ {
+  n->px = -n->px;
+  n->py = -n->py;
+  n->pz = -n->pz;
+ }
 }
 
 void sphereIntersect(struct object3D *sphere, struct ray3D *ray, double *lambda, struct point3D *p, struct point3D *n, double *a, double *b)
@@ -277,10 +318,11 @@ void planeCoordinates(struct object3D *plane, double a, double b, double *x, dou
  // Return in (x,y,z) the coordinates of a point on the plane given by the 2 parameters a,b in [0,1].
  // 'a' controls displacement from the left side of the plane, 'b' controls displacement from the
  // bottom of the plane.
- 
- /////////////////////////////////
- // TO DO: Complete this function.
- /////////////////////////////////   
+ struct point3D p = {plane_left + a * (plane_right - plane_left), plane_bottom + b * (plane_top - plane_bottom), 0, 1};
+ matVecMult(plane->T, &p);
+ *x = p.px;
+ *y = p.py;
+ *z = p.pz;
 }
 
 void sphereCoordinates(struct object3D *sphere, double a, double b, double *x, double *y, double *z)
