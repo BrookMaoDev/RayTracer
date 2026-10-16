@@ -294,10 +294,53 @@ void sphereIntersect(struct object3D *sphere, struct ray3D *ray, double *lambda,
 {
  // Computes and returns the value of 'lambda' at the intersection
  // between the specified ray and the specified canonical sphere.
+ struct ray3D ray_transformed;
+ struct point3D p_canonical;
+ rayTransform(ray, &ray_transformed, sphere);
 
- /////////////////////////////////
- // TO DO: Complete this function.
- /////////////////////////////////
+ // Solve ||p0 + lambda*d||^2 = 1 for the unit sphere at the origin (centre c = 0, radius r = 1).
+ // Using the notes' form lambda = -B/A +/- sqrt(D)/A with:
+ double A = dot(&ray_transformed.d, &ray_transformed.d);
+ double B = dot(&ray_transformed.p0, &ray_transformed.d);
+ double C = dot(&ray_transformed.p0, &ray_transformed.p0) - 1;
+ double D = B * B - A * C;
+
+ // No real solutions, so the ray misses the sphere
+ if (D < 0)
+ {
+  *lambda = -1;
+  return;
+ }
+
+ // lambda1 <= lambda2. Take the smallest solution in front of the ray. If lambda1 is behind the
+ // ray (or is the surface the ray just left) but lambda2 isn't, the ray started inside the sphere.
+ double lambda1 = (-B - sqrt(D)) / A;
+ double lambda2 = (-B + sqrt(D)) / A;
+ if (lambda1 > EPSILON) *lambda = lambda1;
+ else if (lambda2 > EPSILON) *lambda = lambda2;
+ else
+ {
+  *lambda = -1;
+  return;
+ }
+
+ ray_transformed.rayPos(&ray_transformed, *lambda, &p_canonical);
+
+ // Texture coordinates in [0,1] from the spherical angles, using z as the polar axis:
+ // theta = atan2(y, x) in (-PI, PI], phi = asin(z) in [-PI/2, PI/2]
+ double theta = atan2(p_canonical.py, p_canonical.px);
+ if (theta < 0) theta += 2 * PI;
+ double phi = asin(fmin(1, fmax(-1, p_canonical.pz)));	// Clamp so rounding can't push asin out of its domain
+ *a = theta / (2 * PI);
+ *b = (phi + PI / 2) / PI;
+
+ ray->rayPos(ray, *lambda, p);
+
+ // On the unit sphere the outward normal is the hit point itself. It is unit length in canonical
+ // space, but still has to be transformed to world space (normalTransform renormalizes it).
+ // Not flipped: sphere normals always point outward.
+ *n = p_canonical;
+ normalTransform(n, n, sphere);
 }
 
 void cylIntersect(struct object3D *cylinder, struct ray3D *r, double *lambda, struct point3D *p, struct point3D *n, double *a, double *b)
