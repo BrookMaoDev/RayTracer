@@ -229,12 +229,42 @@ struct object3D *newSphere(double ra, double rd, double rs, double rg, double r,
  return(sphere);
 }
 
-struct object3D *newCyl(double ra, double rd, double rs, double rg, double r, double g, double b, double alpha, double R_index, double shiny)
+struct object3D *newCyl(double ra, double rd, double rs, double rg, double r, double g, double b, double alpha, double r_index, double shiny)
 {
- ///////////////////////////////////////////////////////////////////////////////////////
- // TO DO:
- //	Complete the code to create and initialize a new cylinder object.
- ///////////////////////////////////////////////////////////////////////////////////////  
+  struct object3D *cyl = (struct object3D *)calloc(1, sizeof(struct object3D));
+
+  if (!cyl)
+    fprintf(stderr, "Unable to allocate new cylinder, out of memory!\n");
+  else
+  {
+    cyl->alb.ra = ra;
+    cyl->alb.rd = rd;
+    cyl->alb.rs = rs;
+    cyl->alb.rg = rg;
+    cyl->col.R = r;
+    cyl->col.G = g;
+    cyl->col.B = b;
+    cyl->alpha = alpha;
+    cyl->r_index = r_index;
+    cyl->shinyness = shiny;
+    cyl->intersect = &cylIntersect;
+    cyl->surfaceCoords = &cylCoordinates;
+    cyl->randomPoint = &cylSample;
+    cyl->texImg = NULL;
+    cyl->photonMap = NULL;
+    cyl->normalMap = NULL;
+    memcpy(&cyl->T[0][0], &eye4x4[0][0], 16 * sizeof(double));
+    memcpy(&cyl->Tinv[0][0], &eye4x4[0][0], 16 * sizeof(double));
+    cyl->textureMap = &texMap;
+    cyl->frontAndBack = 0;
+    cyl->photonMapped = 0;
+    cyl->normalMapped = 0;
+    cyl->isCSG = 0;
+    cyl->isLightSource = 0;
+    cyl->CSGnext = NULL;
+    cyl->next = NULL;
+  }
+  return (cyl);
 }
 
 
@@ -347,10 +377,80 @@ void cylIntersect(struct object3D *cylinder, struct ray3D *r, double *lambda, st
 {
  // Computes and returns the value of 'lambda' at the intersection
  // between the specified ray and the specified canonical cylinder.
+ // Canonical cylinder (from the notes): x^2 + y^2 = 1 for |z| <= 1, closed with caps at z = 1 and z = -1.
+ struct ray3D ray_transformed;
+ struct point3D p_canonical;
+ rayTransform(r, &ray_transformed, cylinder);
 
- /////////////////////////////////
- // TO DO: Complete this function.
- /////////////////////////////////  
+ struct point3D *p0 = &ray_transformed.p0;
+ struct point3D *d = &ray_transformed.d;
+ enum { CYL_SIDE, CYL_TOP, CYL_BOTTOM } hit_type = CYL_SIDE;
+ double candidates[2];
+ int i;
+
+ *lambda = -1;
+
+ // Side wall: substituting the ray into x^2 + y^2 = 1 gives qa*lambda^2 + qb*lambda + qc = 0 with
+ // qa = dx^2 + dy^2, qb = 2(px*dx + py*dy), qc = px^2 + py^2 - 1.
+ // qa ~ 0 means the ray is parallel to the z axis, so it can't hit the side wall.
+ double qa = d->px * d->px + d->py * d->py;
+ double qb = 2 * (p0->px * d->px + p0->py * d->py);
+ double qc = p0->px * p0->px + p0->py * p0->py - 1;
+ double disc = qb * qb - 4 * qa * qc;
+ if (qa > EPSILON && disc >= 0)
+ {
+  candidates[0] = (-qb - sqrt(disc)) / (2 * qa);
+  candidates[1] = (-qb + sqrt(disc)) / (2 * qa);
+  for (i = 0; i < 2; i++)
+  {
+   // Only the part of the wall with |z| <= 1 is on the cylinder
+   if (candidates[i] > EPSILON && fabs(p0->pz + candidates[i] * d->pz) <= 1 &&
+       (*lambda < 0 || candidates[i] < *lambda))
+   {
+    *lambda = candidates[i];
+    hit_type = CYL_SIDE;
+   }
+  }
+ }
+
+ // Caps: solve pz + lambda*dz = 1 (top) and = -1 (bottom), keeping hits inside x^2 + y^2 <= 1.
+ // dz ~ 0 means the ray is parallel to the caps, so it can't hit them.
+ if (fabs(d->pz) > EPSILON)
+ {
+  candidates[0] = (1 - p0->pz) / d->pz;		// Top cap
+  candidates[1] = (-1 - p0->pz) / d->pz;	// Bottom cap
+  for (i = 0; i < 2; i++)
+  {
+   double x = p0->px + candidates[i] * d->px;
+   double y = p0->py + candidates[i] * d->py;
+   if (candidates[i] > EPSILON && x * x + y * y <= 1 &&
+       (*lambda < 0 || candidates[i] < *lambda))
+   {
+    *lambda = candidates[i];
+    hit_type = (i == 0) ? CYL_TOP : CYL_BOTTOM;
+   }
+  }
+ }
+
+ if (*lambda < 0) return;
+
+ ray_transformed.rayPos(&ray_transformed, *lambda, &p_canonical);
+
+ // Texture coordinates in [0,1]: a from the angle around the z axis, b from the height (inverse of cylCoordinates).
+ // atan2 rather than acos(x) since acos only covers [0, PI] and can't tell y > 0 from y < 0.
+ double theta = atan2(p_canonical.py, p_canonical.px);
+ if (theta < 0) theta += 2 * PI;
+ *a = theta / (2 * PI);
+ *b = (p_canonical.pz + 1) / 2;
+
+ r->rayPos(r, *lambda, p);
+
+ // Canonical outward normal: radial on the side wall (already unit length since x^2 + y^2 = 1), +/-z on the caps
+ n->px = (hit_type == CYL_SIDE) ? p_canonical.px : 0;
+ n->py = (hit_type == CYL_SIDE) ? p_canonical.py : 0;
+ n->pz = (hit_type == CYL_TOP) ? 1 : (hit_type == CYL_BOTTOM) ? -1 : 0;
+ n->pw = 1;
+ normalTransform(n, n, cylinder);
 }
 
 /////////////////////////////////////////////////////////////////
@@ -384,10 +484,12 @@ void cylCoordinates(struct object3D *cyl, double a, double b, double *x, double 
  // Return in (x,y,z) the coordinates of a point on the plane given by the 2 parameters a,b.
  // 'a' in [0, 2*PI] corresponds to angle theta around the cylinder
  // 'b' in [0, 1] corresponds to height from the bottom
- 
- /////////////////////////////////
- // TO DO: Complete this function.
- /////////////////////////////////   
+ // Canonical cylinder has radius 1 and spans z in [-1, 1], so height 2.
+ struct point3D p = {cos(a), sin(a), -1 + 2 * b, 1};
+ matVecMult(cyl->T, &p);
+ *x = p.px;
+ *y = p.py;
+ *z = p.pz;
 }
 
 void planeSample(struct object3D *plane, double *x, double *y, double *z)
