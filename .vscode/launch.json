@@ -6,7 +6,7 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/RayTracer_debug",
-      "args": ["128", "1", "0", "debug.ppm"],
+      "args": ["512", "1", "0", "debug.ppm"],
       "cwd": "${workspaceFolder}",
       "stopAtEntry": false,
       "externalConsole": false,
