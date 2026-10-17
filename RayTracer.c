@@ -174,10 +174,17 @@ void rayTrace(struct ray3D *ray, int depth, struct colourRGB *col, struct object
   return;
  }
 
- ///////////////////////////////////////////////////////
- // TO DO: Complete this function. Refer to the notes
- // if you are unsure what to do here.
- ///////////////////////////////////////////////////////
+ findFirstHit(ray, &lambda, Os, &obj, &p, &n, &a, &b);
+
+ if (lambda < EPSILON)
+ {
+   col->R = -1;
+   col->G = -1;
+   col->B = -1;
+   return;
+ }
+
+ *col = obj->col;
 }
 
 int main(int argc, char *argv[])
