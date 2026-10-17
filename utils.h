@@ -150,6 +150,16 @@ inline void subVectors(struct point3D *a, struct point3D *b)
  b->pw=1;               // Mind the homogeneous coordinate!
 }
 
+inline void scaleVector(double s, struct point3D *a)
+{
+ // Performs the scalar multiplication a=s*a. Note the result
+ // is left in a. Only x, y, z are scaled, the w component is
+ // left untouched.
+ a->px=s*a->px;
+ a->py=s*a->py;
+ a->pz=s*a->pz;
+}
+
 inline double length(struct point3D *a)
 {
  // Compute and return the length of a vector

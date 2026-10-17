@@ -49,6 +49,9 @@ struct pointLS *light_list;
 struct textureNode *texture_list;
 int MAX_DEPTH;
 
+// Ambient light intensity. Kept at white so an ambient albedo of 1 gives the flat object colour.
+static const struct colourRGB ambient_light = {1, 1, 1};
+
 void buildScene(void)
 {
 #include "buildscene.c"		// <-- Import the scene definition! 
@@ -91,14 +94,57 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
   obj->textureMap(obj->texImg,a,b,&R,&G,&B);
  }
 
- //////////////////////////////////////////////////////////////
- // TO DO: Implement this function. Refer to the notes for
- // details about the shading model.
- //////////////////////////////////////////////////////////////
+ //  Ambient term (takes the surface colour)
+ tmp_col.R += obj->alb.ra * ambient_light.R * R;
+ tmp_col.G += obj->alb.ra * ambient_light.G * G;
+ tmp_col.B += obj->alb.ra * ambient_light.B * B;
 
- // Be sure to update 'col' with the final colour computed here!
- return;
+ struct pointLS *ls = light_list;
 
+ while (ls != NULL)
+ {
+   struct point3D p_to_ls_d = ls->p0;
+   subVectors(p, &p_to_ls_d);
+
+   struct ray3D p_to_ls;
+   initRay(&p_to_ls, p, &p_to_ls_d);
+
+   double lambda = -1;
+   struct object3D *next_obj;
+   struct point3D next_p;
+   struct point3D next_n;
+   double next_a, next_b;
+   findFirstHit(&p_to_ls, &lambda, obj, &next_obj, &next_p, &next_n, &next_a, &next_b);
+
+   // p_to_ls_d is unnormalized, so lambda = 1 is at the light. A hit in (0,1) means p is in shadow.
+   // initRay copied the direction, so normalizing it now doesn't affect the shadow ray.
+   normalize(&p_to_ls_d);
+   double n_dot_s = dot(n, &p_to_ls_d);
+
+   // Skip lights behind the surface: no diffuse, and no spurious highlight from the mirror direction
+   if (!(lambda > 0 && lambda < 1) && n_dot_s > 0)
+   {
+     // Diffuse term (takes the surface colour)
+     double coefficient = obj->alb.rd * n_dot_s;
+     tmp_col.R += coefficient * ls->col.R * R;
+     tmp_col.G += coefficient * ls->col.G * G;
+     tmp_col.B += coefficient * ls->col.B * B;
+
+     // Specular term (takes only the light colour, so highlights aren't tinted by the surface)
+     struct point3D mirror_p_to_ls_d = *n;
+     scaleVector(2 * n_dot_s, &mirror_p_to_ls_d);
+     subVectors(&p_to_ls_d, &mirror_p_to_ls_d);
+     coefficient = obj->alb.rs * pow(fmax(0, -dot(&ray->d, &mirror_p_to_ls_d)), obj->shinyness);
+     tmp_col.R += coefficient * ls->col.R;
+     tmp_col.G += coefficient * ls->col.G;
+     tmp_col.B += coefficient * ls->col.B;
+   }
+
+   ls = ls->next;
+ }
+ //  End of local model computations
+
+ *col = tmp_col;
 }
 
 void findFirstHit(struct ray3D *ray, double *lambda, struct object3D *Os, struct object3D **obj, struct point3D *p, struct point3D *n, double *a, double *b)
