@@ -160,6 +160,13 @@ inline void scaleVector(double s, struct point3D *a)
  a->pz=s*a->pz;
 }
 
+inline void scaleRGBVector(double s, struct colourRGB *a)
+{
+  a->R = s * a->R;
+  a->G = s * a->G;
+  a->B = s * a->B;
+}
+
 inline double length(struct point3D *a)
 {
  // Compute and return the length of a vector

@@ -142,7 +142,73 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
 
    ls = ls->next;
  }
+ scaleRGBVector(obj->alpha, &tmp_col);
  //  End of local model computations
+
+ //  Global component
+ if (depth < MAX_DEPTH)
+ {
+   // Reflected portion
+   struct point3D mirror_d = *n;
+   scaleVector(-2 * dot(&ray->d, n), &mirror_d);
+   addVectors(&ray->d, &mirror_d);
+
+   struct ray3D mirror_r;
+   initRay(&mirror_r, p, &mirror_d);
+
+   struct colourRGB reflection;
+   rayTrace(&mirror_r, depth + 1, &reflection, obj);
+   scaleRGBVector(obj->alb.rg, &reflection);
+   if (reflection.R >= 0)
+   {
+     tmp_col.R += reflection.R;
+     tmp_col.G += reflection.G;
+     tmp_col.B += reflection.B;
+   }
+
+   // Refracted portion (only for objects that are at least partly transparent)
+   if (obj->alpha < 1)
+   {
+     // From the notes (7.6.3): d_t = r*b + (r*c - sqrt(1 - r^2(1 - c^2)))*n, with b the incident
+     // direction, c = -n.b, and r = n1/n2. The formula assumes n faces the incoming ray (c > 0).
+     struct point3D n_facing = *n;
+     double c = -dot(n, &ray->d);
+     double n1 = 1, n2 = obj->r_index;	// Entering the object from air
+     if (c < 0)
+     {
+       // Leaving the object: flip the normal to face the ray, and swap the media
+       scaleVector(-1, &n_facing);
+       c = -c;
+       n1 = obj->r_index;
+       n2 = 1;
+     }
+     double r = n1 / n2;
+     double k = 1 - r * r * (1 - c * c);
+
+     // k < 0 is total internal reflection, so there is no transmitted ray
+     if (k >= 0)
+     {
+       struct point3D refracted_d = ray->d;
+       scaleVector(r, &refracted_d);
+       scaleVector(r * c - sqrt(k), &n_facing);
+       addVectors(&n_facing, &refracted_d);
+       normalize(&refracted_d);
+
+       struct ray3D refracted_r;
+       initRay(&refracted_r, p, &refracted_d);
+
+       struct colourRGB refraction;
+       rayTrace(&refracted_r, depth + 1, &refraction, obj);
+       if (refraction.R >= 0)	// Negative means no colour (missed everything or hit max depth)
+       {
+         scaleRGBVector(1 - obj->alpha, &refraction);
+         tmp_col.R += refraction.R;
+         tmp_col.G += refraction.G;
+         tmp_col.B += refraction.B;
+       }
+     }
+   }
+ }
 
  *col = tmp_col;
 }
@@ -230,7 +296,7 @@ void rayTrace(struct ray3D *ray, int depth, struct colourRGB *col, struct object
    return;
  }
 
- *col = obj->col;
+ rtShade(obj, &p, &n, ray, depth, a, b, col);
 }
 
 int main(int argc, char *argv[])
