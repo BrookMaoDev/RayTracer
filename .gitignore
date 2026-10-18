@@ -2,3 +2,5 @@ autotester_id.txt
 RayTracer
 crunchy.zip
 RayTracer_debug
+RayTracer_*/
+RayTracer_*.zip
