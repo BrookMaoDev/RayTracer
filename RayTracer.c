@@ -40,6 +40,9 @@
 * (sign with your name)            (sign with your name)
 ********************************************************************************/
 
+#include <unistd.h>
+#include <pthread.h>
+
 #include "utils.h"	// <-- This includes RayTracer.h
 
 // A couple of global structures and data: An object list, a light list, and the
@@ -299,6 +302,63 @@ void rayTrace(struct ray3D *ray, int depth, struct colourRGB *col, struct object
  rtShade(obj, &p, &n, ray, depth, a, b, col);
 }
 
+void *renderWorker(void *arg)
+{
+  struct renderJob *job = (struct renderJob *)arg;
+  struct view *cam = job->cam;
+  unsigned char *rgbIm = job->rgbIm;
+  double du = job->du;
+  double dv = job->dv;
+  struct point3D e = job->e;
+  struct colourRGB background = job->background;
+  int sx = job->sx;
+
+  struct point3D pc, d; // Point structures to keep the coordinates of a pixel and
+                        // the direction or a ray
+  struct ray3D ray;     // Structure to keep the ray from e to a pixel
+  struct colourRGB col; // Return colour for raytraced pixels
+
+  int j;
+
+  while ((j = __atomic_fetch_add(&job->next_row, 1, __ATOMIC_RELAXED)) < job->sx)
+  {
+    fprintf(stderr, "%d/%d, ", j, sx);
+    for (int i = 0; i < sx; i++)
+    {
+      ///////////////////////////////////////////////////////////////////
+      // TO DO - complete the code that should be in this loop to do the
+      //         raytracing!
+      ///////////////////////////////////////////////////////////////////
+      // Pixel position on the image plane, in camera coordinates, converted to world coordinates
+      pc.px = cam->wl + i * du;
+      pc.py = cam->wt + j * dv;
+      pc.pz = cam->f;
+      pc.pw = 1;
+      matVecMult(cam->C2W, &pc);
+
+      // Unit direction from the camera center through the pixel
+      d = pc;
+      subVectors(&e, &d);
+      normalize(&d);
+      initRay(&ray, &e, &d);
+
+      rayTrace(&ray, 1, &col, NULL);
+
+      // Negative colour means nothing was hit (or max depth reached), so use the background
+      if (col.R < 0)
+        col = background;
+
+      // Clamp to [0,1] and store as 8-bit RGB. Pixels are row-major, 3 bytes per pixel.
+      int idx = 3 * (j * sx + i);
+      rgbIm[idx + 0] = (unsigned char)(255 * fmin(1, fmax(0, col.R)));
+      rgbIm[idx + 1] = (unsigned char)(255 * fmin(1, fmax(0, col.G)));
+      rgbIm[idx + 2] = (unsigned char)(255 * fmin(1, fmax(0, col.B)));
+    } // end for i
+  }
+
+  return NULL;
+}
+
 int main(int argc, char *argv[])
 {
  // Main function for the raytracer. Parses input parameters,
@@ -312,13 +372,9 @@ int main(int argc, char *argv[])
  struct point3D e;		// Camera view parameters 'e', 'g', and 'up'
  struct point3D g;
  struct point3D up;
- double du, dv;			// Increase along u and v directions for pixel coordinates
- struct point3D pc,d;		// Point structures to keep the coordinates of a pixel and
-				// the direction or a ray
- struct ray3D ray;		// Structure to keep the ray from e to a pixel
- struct colourRGB col;		// Return colour for raytraced pixels
+ double du, dv;                 // Increase along u and v directions for pixel coordinates
  struct colourRGB background;   // Background colour
- int i,j;			// Counters for pixel coordinates
+ int j;                         // Counters for pixel coordinates
  unsigned char *rgbIm;
 
  if (argc<5)
@@ -441,42 +497,25 @@ int main(int argc, char *argv[])
  printmatrix(cam->W2C);
  fprintf(stderr,"\n");
 
+ const long MAX_THREADS = sysconf(_SC_NPROCESSORS_ONLN);
+ pthread_t threads[MAX_THREADS];
+ struct renderJob job = {
+     cam, rgbIm, du, dv, e, background, sx, 0};
+
  fprintf(stderr,"Rendering row: ");
- for (j=0;j<sx;j++)		// For each of the pixels in the image
+ for (j = 0; j < MAX_THREADS; j++) // For each of the pixels in the image
  {
-  fprintf(stderr,"%d/%d, ",j,sx);
-  for (i=0;i<sx;i++)
-  {
-    ///////////////////////////////////////////////////////////////////
-    // TO DO - complete the code that should be in this loop to do the
-    //         raytracing!
-    ///////////////////////////////////////////////////////////////////
-    // Pixel position on the image plane, in camera coordinates, converted to world coordinates
-    pc.px = cam->wl + i * du;
-    pc.py = cam->wt + j * dv;
-    pc.pz = cam->f;
-    pc.pw = 1;
-    matVecMult(cam->C2W, &pc);
-
-    // Unit direction from the camera center through the pixel
-    d = pc;
-    subVectors(&e, &d);
-    normalize(&d);
-    initRay(&ray, &e, &d);
-
-    rayTrace(&ray, 1, &col, NULL);
-
-    // Negative colour means nothing was hit (or max depth reached), so use the background
-    if (col.R < 0)
-      col = background;
-
-    // Clamp to [0,1] and store as 8-bit RGB. Pixels are row-major, 3 bytes per pixel.
-    int idx = 3 * (j * sx + i);
-    rgbIm[idx + 0] = (unsigned char)(255 * fmin(1, fmax(0, col.R)));
-    rgbIm[idx + 1] = (unsigned char)(255 * fmin(1, fmax(0, col.G)));
-    rgbIm[idx + 2] = (unsigned char)(255 * fmin(1, fmax(0, col.B)));
-  } // end for i
+   if (pthread_create(&threads[j], NULL, renderWorker, &job) != 0)
+   {
+     fprintf(stderr, "Unable to create render thread\n");
+     exit(1);
+   }
  } // end for j
+
+ for (j = 0; j < MAX_THREADS; j++)
+ {
+   pthread_join(threads[j], NULL);
+ }
 
  fprintf(stderr,"\nDone!\n");
 
@@ -489,4 +528,3 @@ int main(int argc, char *argv[])
  free(cam);						// camera view
  exit(0);
 }
-

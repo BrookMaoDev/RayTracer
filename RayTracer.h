@@ -187,6 +187,23 @@ struct view{
 	double C2W[4][4];		// Camera2World conversion matrix
 };
 
+/*
+   The structure below holds the data shared by the render threads. Everything
+   is read-only during the render except next_row. 8-byte aligned members come
+   first and the ints last, so the structure has no padding.
+*/
+struct renderJob
+{
+	struct view *cam;			 // Camera and view for this scene
+	unsigned char *rgbIm;		 // Output image, row-major, 3 bytes per pixel
+	double du;					 // Increase along u for pixel coordinates
+	double dv;					 // Increase along v for pixel coordinates
+	struct point3D e;			 // Camera center
+	struct colourRGB background; // Background colour
+	int sx;						 // Size of the raytraced image
+	int next_row;				 // Next row to be claimed. Only access atomically!
+};
+
 // Function definitions start here
 int main(int argc, char *argv[]);									// Main raytracing function.
 
