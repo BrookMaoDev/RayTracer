@@ -40,6 +40,9 @@
 * (sign with your name)            (sign with your name)
 ********************************************************************************/
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE // needed for gettid() in <unistd.h>; must come before any #include
+#endif
 #include <unistd.h>
 #include <pthread.h>
 
@@ -312,6 +315,7 @@ void *renderWorker(void *arg)
   struct point3D e = job->e;
   struct colourRGB background = job->background;
   int sx = job->sx;
+  int antialiasing = job->antialiasing;
 
   struct point3D pc, d; // Point structures to keep the coordinates of a pixel and
                         // the direction or a ray
@@ -320,39 +324,59 @@ void *renderWorker(void *arg)
 
   int j;
 
+  unsigned int seed = gettid();
+
   while ((j = __atomic_fetch_add(&job->next_row, 1, __ATOMIC_RELAXED)) < job->sx)
   {
     fprintf(stderr, "%d/%d, ", j, sx);
     for (int i = 0; i < sx; i++)
     {
-      ///////////////////////////////////////////////////////////////////
-      // TO DO - complete the code that should be in this loop to do the
-      //         raytracing!
-      ///////////////////////////////////////////////////////////////////
-      // Pixel position on the image plane, in camera coordinates, converted to world coordinates
-      pc.px = cam->wl + i * du;
-      pc.py = cam->wt + j * dv;
-      pc.pz = cam->f;
-      pc.pw = 1;
-      matVecMult(cam->C2W, &pc);
+      int N = job->antialiasing ? 4 : 1; // 16 spp vs 1
+      double sumR = 0, sumG = 0, sumB = 0;
 
-      // Unit direction from the camera center through the pixel
-      d = pc;
-      subVectors(&e, &d);
-      normalize(&d);
-      initRay(&ray, &e, &d);
+      for (int a = 0; a < N; a++)
+        for (int b = 0; b < N; b++)
+        {
+          // offset in (-0.5, 0.5) pixel units; centre of sub-cell when N==1
+          double ou = (N == 1) ? 0 : ((a + rand_r(&seed) / (RAND_MAX + 1.0)) / N - 0.5);
+          double ov = (N == 1) ? 0 : ((b + rand_r(&seed) / (RAND_MAX + 1.0)) / N - 0.5);
 
-      rayTrace(&ray, 1, &col, NULL);
+          ///////////////////////////////////////////////////////////////////
+          // TO DO - complete the code that should be in this loop to do the
+          //         raytracing!
+          ///////////////////////////////////////////////////////////////////
+          // Pixel position on the image plane, in camera coordinates, converted to world coordinates
+          pc.px = cam->wl + (i + ou) * du;
+          pc.py = cam->wt + (j + ov) * dv;
+          pc.pz = cam->f;
+          pc.pw = 1;
+          matVecMult(cam->C2W, &pc);
 
-      // Negative colour means nothing was hit (or max depth reached), so use the background
-      if (col.R < 0)
-        col = background;
+          // Unit direction from the camera center through the pixel
+          d = pc;
+          subVectors(&e, &d);
+          normalize(&d);
+          initRay(&ray, &e, &d);
 
-      // Clamp to [0,1] and store as 8-bit RGB. Pixels are row-major, 3 bytes per pixel.
+          rayTrace(&ray, 1, &col, NULL);
+
+          // Negative colour means nothing was hit (or max depth reached), so use the background
+          if (col.R < 0)
+            col = background;
+
+          sumR += fmin(1, fmax(0, col.R)); // clamp per sample
+          sumG += fmin(1, fmax(0, col.G));
+          sumB += fmin(1, fmax(0, col.B));
+        }
+
+      col.R = sumR / (N * N);
+      col.G = sumG / (N * N);
+      col.B = sumB / (N * N);
+
       int idx = 3 * (j * sx + i);
-      rgbIm[idx + 0] = (unsigned char)(255 * fmin(1, fmax(0, col.R)));
-      rgbIm[idx + 1] = (unsigned char)(255 * fmin(1, fmax(0, col.G)));
-      rgbIm[idx + 2] = (unsigned char)(255 * fmin(1, fmax(0, col.B)));
+      rgbIm[idx + 0] = (unsigned char)(255 * col.R);
+      rgbIm[idx + 1] = (unsigned char)(255 * col.G);
+      rgbIm[idx + 2] = (unsigned char)(255 * col.B);
     } // end for i
   }
 
@@ -500,7 +524,7 @@ int main(int argc, char *argv[])
  const long MAX_THREADS = sysconf(_SC_NPROCESSORS_ONLN);
  pthread_t threads[MAX_THREADS];
  struct renderJob job = {
-     cam, rgbIm, du, dv, e, background, sx, 0};
+     cam, rgbIm, du, dv, e, background, sx, antialiasing, 0};
 
  fprintf(stderr,"Rendering row: ");
  for (j = 0; j < MAX_THREADS; j++) // For each of the pixels in the image

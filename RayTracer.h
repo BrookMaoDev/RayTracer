@@ -201,6 +201,7 @@ struct renderJob
 	struct point3D e;			 // Camera center
 	struct colourRGB background; // Background colour
 	int sx;						 // Size of the raytraced image
+	int antialiasing;			 // 0 disables antialiasing, nonzero enables it
 	int next_row;				 // Next row to be claimed. Only access atomically!
 };
 
