@@ -617,19 +617,34 @@ void texMap(struct image *img, double a, double b, double *R, double *G, double 
  // interpolation to obtain the texture colour.
  //////////////////////////////////////////////////
 
- double *rgbdata = (double *)img->rgbdata;
- int col = a * img->sx;
- int row = b * img->sy;
- if (col >= img->sx)
-   col = img->sx - 1; // a == 1 or b == 1 would read one past the end
- if (row >= img->sy)
-   row = img->sy - 1;
- int offset = 3 * (row * img->sx + col);
+ double *rgb = (double *)img->rgbdata;
 
- *(R) = rgbdata[offset];     // Returns black - delete this and
- *(G) = rgbdata[offset + 1]; // replace with your code to compute
- *(B) = rgbdata[offset + 2]; // texture colour at (a,b)
- return;
+ a = fmin(1, fmax(0, a)); // guard against rounding just outside [0,1]
+ b = fmin(1, fmax(0, b));
+
+ double x = a * (img->sx - 1);
+ double y = (1 - b) * (img->sy - 1); // b = 1 (top of object) -> row 0 (top of image)
+
+ int x0 = (int)x, y0 = (int)y;
+ int x1 = (x0 + 1 < img->sx) ? x0 + 1 : x0;
+ int y1 = (y0 + 1 < img->sy) ? y0 + 1 : y0;
+ double fx = x - x0, fy = y - y0;
+
+ const double *p00 = rgb + 3 * (y0 * img->sx + x0); // top-left
+ const double *p10 = rgb + 3 * (y0 * img->sx + x1); // top-right
+ const double *p01 = rgb + 3 * (y1 * img->sx + x0); // bottom-left
+ const double *p11 = rgb + 3 * (y1 * img->sx + x1); // bottom-right
+
+ double out[3];
+ for (int c = 0; c < 3; c++)
+ {
+   double top = (1 - fx) * p00[c] + fx * p10[c];
+   double bottom = (1 - fx) * p01[c] + fx * p11[c];
+   out[c] = (1 - fy) * top + fy * bottom;
+ }
+ *R = out[0];
+ *G = out[1];
+ *B = out[2];
 }
 
 void alphaMap(struct image *img, double a, double b, double *alpha)
