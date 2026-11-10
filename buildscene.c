@@ -40,7 +40,7 @@
  invert(&o->T[0][0],&o->Tinv[0][0]);			// Compute the inverse transform * DON'T FORGET TO DO THIS! *
 
  // If needed, this is how you load a texture map
- loadTexture(o, "./textures/Poliigon_MetalGoldPaint_7253_BaseColor.ppm", 1, &texture_list); // This loads a texture called 'Poliigon_WoodVeneerOak_7760_BaseColor.ppm'. The
+ loadTexture(o, "./textures/Poliigon_StoneQuartzite_8060_BaseColor.ppm", 1, &texture_list); // This loads a texture called 'Poliigon_WoodVeneerOak_7760_BaseColor.ppm'. The
 																							// texture gets added to the texture list, and a
 																							// pointer to it is stored within this object in the
 																							// corresponding place. The '1' indicates this image
@@ -61,7 +61,7 @@
  RotateZ(o,-PI/1.5);
  Translate(o,-2.2,1.75,1.35);
  invert(&o->T[0][0],&o->Tinv[0][0]);
- loadTexture(o, "./textures/Poliigon_StoneQuartzite_8060_BaseColor.ppm", 1, &texture_list);
+ loadTexture(o, "./textures/Poliigon_MetalGoldPaint_7253_BaseColor.ppm", 1, &texture_list);
  insertObject(o,&object_list);
 
  o=newPlane(.05,.75,.05,.05,.55,.8,.75,1,1,2);
