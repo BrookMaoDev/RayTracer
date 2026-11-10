@@ -172,6 +172,7 @@ struct object3D *newPlane(double ra, double rd, double rs, double rg, double r, 
   memcpy(&plane->T[0][0],&eye4x4[0][0],16*sizeof(double));
   memcpy(&plane->Tinv[0][0],&eye4x4[0][0],16*sizeof(double));
   plane->textureMap=&texMap;
+  plane->normMap = &normMap;
   plane->frontAndBack=1;
   plane->photonMapped=0;
   plane->normalMapped=0;
@@ -219,6 +220,7 @@ struct object3D *newSphere(double ra, double rd, double rs, double rg, double r,
   memcpy(&sphere->T[0][0],&eye4x4[0][0],16*sizeof(double));
   memcpy(&sphere->Tinv[0][0],&eye4x4[0][0],16*sizeof(double));
   sphere->textureMap=&texMap;
+  sphere->normMap = &normMap;
   sphere->frontAndBack=0;
   sphere->photonMapped=0;
   sphere->normalMapped=0;
@@ -256,6 +258,7 @@ struct object3D *newCyl(double ra, double rd, double rs, double rg, double r, do
     memcpy(&cyl->T[0][0], &eye4x4[0][0], 16 * sizeof(double));
     memcpy(&cyl->Tinv[0][0], &eye4x4[0][0], 16 * sizeof(double));
     cyl->textureMap = &texMap;
+    cyl->normMap = &normMap;
     cyl->frontAndBack = 0;
     cyl->photonMapped = 0;
     cyl->normalMapped = 0;
@@ -309,6 +312,11 @@ void planeIntersect(struct object3D *plane, struct ray3D *ray, double *lambda, s
  *b = (p_canonical.py - plane_bottom) / (plane_top - plane_bottom);
 
  ray->rayPos(ray, *lambda, p);
+
+ if (plane->normalMap)
+ {
+   plane->normMap(plane->normalMap, *a, *b, n);
+ }
  normalTransform(n, n, plane);
 
  // If both sides should be lit, make the normal face the side the ray came from
@@ -370,6 +378,10 @@ void sphereIntersect(struct object3D *sphere, struct ray3D *ray, double *lambda,
  // space, but still has to be transformed to world space (normalTransform renormalizes it).
  // Not flipped: sphere normals always point outward.
  *n = p_canonical;
+ if (sphere->normalMap)
+ {
+   sphere->normMap(sphere->normalMap, *a, *b, n);
+ }
  normalTransform(n, n, sphere);
 }
 
@@ -450,6 +462,10 @@ void cylIntersect(struct object3D *cylinder, struct ray3D *r, double *lambda, st
  n->py = (hit_type == CYL_SIDE) ? p_canonical.py : 0;
  n->pz = (hit_type == CYL_TOP) ? 1 : (hit_type == CYL_BOTTOM) ? -1 : 0;
  n->pw = 1;
+ if (cylinder->normalMap)
+ {
+   cylinder->normMap(cylinder->normalMap, *a, *b, n);
+ }
  normalTransform(n, n, cylinder);
 }
 
@@ -645,6 +661,47 @@ void texMap(struct image *img, double a, double b, double *R, double *G, double 
  *R = out[0];
  *G = out[1];
  *B = out[2];
+}
+
+void normMap(struct image *img, double a, double b, struct point3D *n)
+{
+  // Only guaranteed for our basic shapes: it assumes up x n and n x t give the image's right and up directions on the surface, and the fallback used when n is parallel to up may not suit other shapes.
+  double x_coef, y_coef, n_coef;
+  sampleNormalMap(img, a, b, &x_coef, &y_coef, &n_coef);
+
+  struct point3D up = {0, 0, 1, 1};
+  struct point3D *t = cross(&up, n);
+  if (t->px * t->px + t->py * t->py + t->pz * t->pz < EPSILON * EPSILON)
+  {
+    t->px = 1; // n is parallel to up, so use the x axis (the plane's right direction)
+    t->py = 0;
+    t->pz = 0;
+  }
+  normalize(t);
+  struct point3D *bt = cross(n, t);
+
+  scaleVector(x_coef, t);
+  scaleVector(y_coef, bt);
+  scaleVector(n_coef, n);
+
+  addVectors(t, n);
+  addVectors(bt, n);
+  normalize(n);
+
+  free(t);
+  free(bt);
+}
+
+void sampleNormalMap(struct image *img, double a, double b, double *x_coef, double *y_coef, double *n_coef)
+{
+  // Returns the tangent-space normal stored in a normal map at texture coordinates (a,b), bilinearly
+  // interpolated. Each channel is decoded from [0,1] to [-1,1], giving the coefficients of the
+  // perturbed normal in the surface's local basis: n = x_coef*T + y_coef*Bt + n_coef*N.
+  // The result is not unit length (interpolation shortens it), so normalize the final normal.
+  texMap(img, a, b, x_coef, y_coef, n_coef);
+  *x_coef = 2 * *x_coef - 1; // Coefficient for the tangent T: the surface direction in which a increases (left to right in the image)
+  *y_coef = 2 * *y_coef - 1; // Coefficient for the bitangent Bt: the surface direction in which b increases (towards the top of the image)
+  *n_coef = 2 * *n_coef - 1; // Coefficient for the geometric normal N
 }
 
 void alphaMap(struct image *img, double a, double b, double *alpha)

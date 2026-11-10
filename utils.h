@@ -227,6 +227,8 @@ void cylIntersect(struct object3D *cylinder, struct ray3D *r, double *lambda, st
 // You will need to add code for these if you implement texture mapping.
 void loadTexture(struct object3D *o, const char *filename, int type, struct textureNode **t_list);
 void texMap(struct image *img, double a, double b, double *R, double *G, double *B);
+void normMap(struct image *img, double a, double b, struct point3D *n);
+void sampleNormalMap(struct image *img, double a, double b, double *x_coef, double *y_coef, double *n_coef);
 void alphaMap(struct image *img, double a, double b, double *R, double *G, double *B);
 
 // Functions to insert objects and lights into their respective lists
