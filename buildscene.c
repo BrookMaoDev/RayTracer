@@ -40,20 +40,20 @@
  invert(&o->T[0][0],&o->Tinv[0][0]);			// Compute the inverse transform * DON'T FORGET TO DO THIS! *
 
  // If needed, this is how you load a texture map
- // loadTexture(o,"./Texture/mosaic2.ppm",1,&texture_list);	// This loads a texture called 'mosaic2.ppm'. The
-								// texture gets added to the texture list, and a
-								// pointer to it is stored within this object in the
-								// corresponding place. The '1' indicates this image
-								// will be used as a texture map. Use '2' to load
-								// an image as a normal map, and '3' to load an
-								// alpha map. Texture and normal maps are RGB .ppm
-								// files, alpha maps are grayscale .pgm files.
-								// * DO NOT * try to free image data loaded in this
-								// way, the cleanup function already provided will do
-								// this at the end.
- 
-  insertObject(o,&object_list);			// <-- If you don't insert the object into the object list,
-						//     nothing happens! your object won't be rendered.
+ loadTexture(o, "./textures/Poliigon_WoodVeneerOak_7760_BaseColor.ppm", 1, &texture_list); // This loads a texture called 'Poliigon_WoodVeneerOak_7760_BaseColor.ppm'. The
+																						   // texture gets added to the texture list, and a
+																						   // pointer to it is stored within this object in the
+																						   // corresponding place. The '1' indicates this image
+																						   // will be used as a texture map. Use '2' to load
+																						   // an image as a normal map, and '3' to load an
+																						   // alpha map. Texture and normal maps are RGB .ppm
+																						   // files, alpha maps are grayscale .pgm files.
+																						   // * DO NOT * try to free image data loaded in this
+																						   // way, the cleanup function already provided will do
+																						   // this at the end.
+
+ insertObject(o, &object_list); // <-- If you don't insert the object into the object list,
+								//     nothing happens! your object won't be rendered.
 
  // That's it for defining a single sphere... let's add a couple more objects
  o=newSphere(.05,.95,.95,.75,.75,.95,.55,1,1,6);

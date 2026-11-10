@@ -476,7 +476,12 @@ void sphereCoordinates(struct object3D *sphere, double a, double b, double *x, d
 
  /////////////////////////////////
  // TO DO: Complete this function.
- /////////////////////////////////   
+ /////////////////////////////////
+ struct point3D p = {cos(a) * cos(b), sin(a) * cos(b), sin(b), 1};
+ matVecMult(sphere->T, &p);
+ *x = p.px;
+ *y = p.py;
+ *z = p.pz;
 }
 
 void cylCoordinates(struct object3D *cyl, double a, double b, double *x, double *y, double *z)
@@ -612,9 +617,18 @@ void texMap(struct image *img, double a, double b, double *R, double *G, double 
  // interpolation to obtain the texture colour.
  //////////////////////////////////////////////////
 
- *(R)=0;	// Returns black - delete this and
- *(G)=0;	// replace with your code to compute
- *(B)=0;	// texture colour at (a,b)
+ double *rgbdata = (double *)img->rgbdata;
+ int col = a * img->sx;
+ int row = b * img->sy;
+ if (col >= img->sx)
+   col = img->sx - 1; // a == 1 or b == 1 would read one past the end
+ if (row >= img->sy)
+   row = img->sy - 1;
+ int offset = 3 * (row * img->sx + col);
+
+ *(R) = rgbdata[offset];     // Returns black - delete this and
+ *(G) = rgbdata[offset + 1]; // replace with your code to compute
+ *(B) = rgbdata[offset + 2]; // texture colour at (a,b)
  return;
 }
 
