@@ -213,6 +213,7 @@ struct object3D *newCyl(double ra, double rd, double rs, double rg, double r, do
 void planeCoordinates(struct object3D *plane, double a, double b, double *x, double *y, double *z);
 void sphereCoordinates(struct object3D *plane, double a, double b, double *x, double *y, double *z);
 void cylCoordinates(struct object3D *plane, double a, double b, double *x, double *y, double *z);
+double randUnit(void);
 void planeSample(struct object3D *plane, double *x, double *y, double *z);
 void sphereSample(struct object3D *plane, double *x, double *y, double *z);
 void cylSample(struct object3D *plane, double *x, double *y, double *z);
@@ -234,8 +235,8 @@ void alphaMap(struct image *img, double a, double b, double *alpha);
 // Functions to insert objects and lights into their respective lists
 void insertObject(struct object3D *o, struct object3D **list);
 void insertPLS(struct pointLS *l, struct pointLS **list);
-void addAreaLight(double sx, double sy, double nx, double ny, double nz,\
-                  double tx, double ty, double tz, int lx, int ly,\
+void addAreaLight(double sx, double sy, double nx, double ny, double nz,
+                  double tx, double ty, double tz, int N,
                   double r, double g, double b, struct object3D **o_list, struct pointLS **l_list);
 
 // Function to set up the camera and viewing coordinate frame.

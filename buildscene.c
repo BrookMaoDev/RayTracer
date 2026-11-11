@@ -79,12 +79,16 @@
 
  // Insert a single point light source. We set up its position as a point structure, and specify its
  // colour in terms of RGB (in [0,1]).
- p.px=0;
- p.py=25.5;
- p.pz=-3.5;
- p.pw=1;
- l=newPLS(&p,.95,.95,.95);
- insertPLS(l,&light_list);
+ // p.px=0;
+ // p.py=25.5;
+ // p.pz=-3.5;
+ // p.pw=1;
+ // l=newPLS(&p,.95,.95,.95);
+ // insertPLS(l,&light_list);
+
+ // Area light in place of the point light above: a 6x6 rectangle at the same position, facing
+ // down, sampled with 16 point lights per shading call
+ addAreaLight(6, 6, 0, -1, 0, 0, 25.5, -3.5, 16, .95, .95, .95, &object_list, &light_list);
 
  // End of simple scene for Assignment 2
  // Keep in mind that you can define new types of objects such as cylinders and parametric surfaces,

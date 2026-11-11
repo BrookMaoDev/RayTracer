@@ -32,6 +32,11 @@
 * (sign with your name)            (sign with your name)
 ********************************************************************************/
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE // needed for gettid() in <unistd.h>; must come before any #include
+#endif
+#include <unistd.h>
+
 #include "utils.h"
 
 // A useful 4x4 identity matrix which can be used at any point to
@@ -516,6 +521,21 @@ void cylCoordinates(struct object3D *cyl, double a, double b, double *x, double 
  *z = p.pz;
 }
 
+double randUnit(void)
+{
+ // Returns a uniform random number in [0,1). Each thread has its own seed, set from its
+ // thread id on first use, so this is safe to call from any render thread without locking
+ // and without passing a seed around.
+ static __thread unsigned int seed;
+ static __thread int seeded = 0;
+ if (!seeded)
+ {
+  seed = gettid();
+  seeded = 1;
+ }
+ return rand_r(&seed) / (RAND_MAX + 1.0);
+}
+
 void planeSample(struct object3D *plane, double *x, double *y, double *z)
 {
  // Returns the 3D coordinates (x,y,z) of a randomly sampled point on the plane
@@ -524,7 +544,10 @@ void planeSample(struct object3D *plane, double *x, double *y, double *z)
 
  /////////////////////////////////
  // TO DO: Complete this function.
- /////////////////////////////////   
+ /////////////////////////////////
+ double a = randUnit();
+ double b = randUnit();
+ planeCoordinates(plane, a, b, x, y, z);
 }
 
 void sphereSample(struct object3D *sphere, double *x, double *y, double *z)
@@ -536,7 +559,10 @@ void sphereSample(struct object3D *sphere, double *x, double *y, double *z)
  
  /////////////////////////////////
  // TO DO: Complete this function.
- /////////////////////////////////   
+ /////////////////////////////////
+ double a = randUnit();
+ double b = randUnit();
+ sphereCoordinates(sphere, a, b, x, y, z);
 }
 
 void cylSample(struct object3D *cyl, double *x, double *y, double *z)
@@ -546,7 +572,10 @@ void cylSample(struct object3D *cyl, double *x, double *y, double *z)
 
  /////////////////////////////////
  // TO DO: Complete this function.
- /////////////////////////////////   
+ /////////////////////////////////
+ double a = randUnit();
+ double b = randUnit();
+ cylCoordinates(cyl, a, b, x, y, z);
 }
 
 
@@ -793,6 +822,28 @@ void addAreaLight(double sx, double sy, double nx, double ny, double nz,\
   //       light source's object surface within rtShade(). This is a bit more tricky
   //       but reduces artifacts significantly. If you do that, then there is no need
   //       to insert a series of point lightsources in this function.
+
+ struct object3D *rect = newPlane(1, 0, 0, 0, // ra, rd, rs, rg
+                                  r, g, b,    // the light's colour: this one matters
+                                  1,          // alpha: opaque, keeps it out of the refraction branch
+                                  1,          // r_index: harmless, avoids the divide-by-zero
+                                  1);         // shiny: unused
+ rect->isLightSource = 1;
+ rect->lightSamples = N;
+ Scale(rect, sx / 2, sy / 2, 1);
+
+ // Rotate the canonical normal (0,0,1) onto the normalized (nx,ny,nz) using spherical angles:
+ //   RotateY(phi):   (0,0,1) -> (sin(phi), 0, cos(phi))                        fixes z
+ //   RotateZ(theta): -> (sin(phi)cos(theta), sin(phi)sin(theta), cos(phi))     fixes x and y
+ double len = sqrt(nx * nx + ny * ny + nz * nz);
+ double phi = acos(fmax(-1, fmin(1, nz / len)));	// clamp guards against rounding outside [-1,1]
+ double theta = atan2(ny, nx);				// atan2 is scale-invariant, no need to normalize
+ RotateY(rect, phi);
+ RotateZ(rect, theta);
+
+ Translate(rect, tx, ty, tz);
+ invert(&rect->T[0][0], &rect->Tinv[0][0]);
+ insertObject(rect, o_list);
 }
 
 ///////////////////////////////////

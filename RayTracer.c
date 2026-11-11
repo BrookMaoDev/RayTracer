@@ -78,6 +78,12 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
  // - The colour for this ray (using the col pointer)
  //
 
+ if (obj->isLightSource)
+ {
+   *col = obj->col;
+   return;
+ }
+
  struct colourRGB tmp_col;	// Accumulator for colour components
  double R,G,B;			// Colour for the object in R G and B
  double opaqueness = obj->alpha;
@@ -112,7 +118,34 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
  tmp_col.G += obj->alb.ra * ambient_light.G * G;
  tmp_col.B += obj->alb.ra * ambient_light.B * B;
 
- struct pointLS *ls = light_list;
+ // Area lights: sample lightSamples random points on each one's surface and treat them as point
+ // lights, each with 1/N of the light's colour so total brightness doesn't depend on N. The
+ // samples live on the stack and are chained in front of light_list, so the loop below sees
+ // them followed by the regular point lights, and light_list itself is never modified.
+ int num_samples = 0;
+ for (struct object3D *o = object_list; o != NULL; o = o->next)
+   if (o->isLightSource && o->lightSamples > 0) num_samples += o->lightSamples;
+
+ struct pointLS samples[num_samples > 0 ? num_samples : 1];
+ struct pointLS *head = light_list;
+ int k = 0;
+ for (struct object3D *o = object_list; o != NULL; o = o->next)
+ {
+   if (!o->isLightSource || o->lightSamples <= 0) continue;
+   double w = 1.0 / o->lightSamples;
+   for (int s = 0; s < o->lightSamples; s++, k++)
+   {
+     o->randomPoint(o, &samples[k].p0.px, &samples[k].p0.py, &samples[k].p0.pz);
+     samples[k].p0.pw = 1;
+     samples[k].col.R = w * o->col.R;
+     samples[k].col.G = w * o->col.G;
+     samples[k].col.B = w * o->col.B;
+     samples[k].next = head;
+     head = &samples[k];
+   }
+ }
+
+ struct pointLS *ls = head;
 
  while (ls != NULL)
  {
@@ -143,14 +176,17 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
      findFirstHit(&to_ls, &lambda, from_obj, &next_obj, &next_p, &next_n, &next_a, &next_b);
      if (!(lambda > 0 && lambda < 1)) break; // Nothing left between here and the light
 
-     double blocker = next_obj->alpha;
-     if (next_obj->alphaMap)
+     if (!next_obj->isLightSource)
      {
-       double m;
-       next_obj->alphMap(next_obj->alphaMap, next_a, next_b, &m);
-       blocker *= m;
+       double blocker = next_obj->alpha;
+       if (next_obj->alphaMap)
+       {
+         double m;
+         next_obj->alphMap(next_obj->alphaMap, next_a, next_b, &m);
+         blocker *= m;
+       }
+       transmission *= 1 - blocker;
      }
-     transmission *= 1 - blocker;
 
      // Continue from the blocker's hit point
      from = next_p;
@@ -354,8 +390,6 @@ void *renderWorker(void *arg)
 
   int j;
 
-  unsigned int seed = gettid();
-
   while ((j = __atomic_fetch_add(&job->next_row, 1, __ATOMIC_RELAXED)) < job->sx)
   {
     for (int i = 0; i < sx; i++)
@@ -367,8 +401,8 @@ void *renderWorker(void *arg)
         for (int b = 0; b < N; b++)
         {
           // offset in (-0.5, 0.5) pixel units; centre of sub-cell when N==1
-          double ou = (N == 1) ? 0 : ((a + rand_r(&seed) / (RAND_MAX + 1.0)) / N - 0.5);
-          double ov = (N == 1) ? 0 : ((b + rand_r(&seed) / (RAND_MAX + 1.0)) / N - 0.5);
+          double ou = (N == 1) ? 0 : ((a + randUnit()) / N - 0.5);
+          double ov = (N == 1) ? 0 : ((b + randUnit()) / N - 0.5);
 
           ///////////////////////////////////////////////////////////////////
           // TO DO - complete the code that should be in this loop to do the

@@ -153,6 +153,7 @@ struct object3D{
 	int 	frontAndBack;		// Flag to indicate that both sides of the object
 					// should be lit.
 	int	isLightSource;		// Flag to indicate if this is an area light source
+	int	lightSamples;		// Area lights only: point lights sampled from the surface per shading call
 	int isCSG;			// Object is part of a CSG composite object. Links to components via CSGnext
 	int photonMapped;		// This object accumulates photons under photon mapping
 	int normalMapped;		// This object has an associated normal map
