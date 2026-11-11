@@ -52,7 +52,7 @@
 																								   // way, the cleanup function already provided will do
 																								   // this at the end.
  loadTexture(o, "./textures/normals/Poliigon_MetalGoldPaint_7253_Normal.ppm", 2, &texture_list);
- loadTexture(o, "./textures/alphas/perforated_holes.pgm", 3, &texture_list);
+ //  loadTexture(o, "./textures/alphas/perforated_holes.pgm", 3, &texture_list);
  insertObject(o, &object_list); // <-- If you don't insert the object into the object list,
 								//     nothing happens! your object won't be rendered.
 
@@ -64,7 +64,7 @@
  invert(&o->T[0][0],&o->Tinv[0][0]);
  loadTexture(o, "./textures/colors/Poliigon_StoneQuartzite_8060_BaseColor.ppm", 1, &texture_list);
  loadTexture(o, "./textures/normals/Poliigon_StoneQuartzite_8060_Normal.ppm", 2, &texture_list);
- loadTexture(o, "./textures/alphas/perforated_holes.pgm", 3, &texture_list);
+ //  loadTexture(o, "./textures/alphas/perforated_holes.pgm", 3, &texture_list);
  insertObject(o, &object_list);
 
  o=newPlane(.05,.75,.05,.05,.55,.8,.75,1,1,2);
@@ -87,8 +87,8 @@
  // insertPLS(l,&light_list);
 
  // Area light in place of the point light above: a 6x6 rectangle at the same position, facing
- // down, sampled with 16 point lights per shading call
- addAreaLight(6, 6, 0, -1, 0, 0, 25.5, -3.5, 16, .95, .95, .95, &object_list, &light_list);
+ // down, sampled with 64 point lights per shading call
+ addAreaLight(6, 6, 0, -1, 0, 0, 25.5, -3.5, 64, .95, .95, .95, &object_list, &light_list);
 
  // End of simple scene for Assignment 2
  // Keep in mind that you can define new types of objects such as cylinders and parametric surfaces,
