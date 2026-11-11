@@ -80,6 +80,13 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
 
  struct colourRGB tmp_col;	// Accumulator for colour components
  double R,G,B;			// Colour for the object in R G and B
+ double opaqueness = obj->alpha;
+ if (obj->alphaMap)
+ {
+   double m;
+   obj->alphMap(obj->alphaMap, a, b, &m);
+   opaqueness *= m;
+ }
 
  // This will hold the colour as we process all the components of
  // the Phong illumination model
@@ -111,27 +118,50 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
  {
    struct point3D p_to_ls_d = ls->p0;
    subVectors(p, &p_to_ls_d);
-
-   struct ray3D p_to_ls;
-   initRay(&p_to_ls, p, &p_to_ls_d);
-
-   double lambda = -1;
-   struct object3D *next_obj;
-   struct point3D next_p;
-   struct point3D next_n;
-   double next_a, next_b;
-   findFirstHit(&p_to_ls, &lambda, obj, &next_obj, &next_p, &next_n, &next_a, &next_b);
-
-   // p_to_ls_d is unnormalized, so lambda = 1 is at the light. A hit in (0,1) means p is in shadow.
-   // initRay copied the direction, so normalizing it now doesn't affect the shadow ray.
    normalize(&p_to_ls_d);
    double n_dot_s = dot(n, &p_to_ls_d);
 
+   // Fraction of this light that reaches p (1 = unblocked). Follow the shadow ray through every
+   // blocker between p and the light, multiplying in how much each one lets through; an opaque
+   // blocker brings it to 0 and ends the loop.
+   double transmission = 1;
+   struct point3D from = *p;
+   struct object3D *from_obj = obj;
+   while (n_dot_s > 0 && transmission > 0)
+   {
+     // Unnormalized direction, so lambda = 1 is at the light and a hit in (0,1) is a blocker
+     struct point3D to_ls_d = ls->p0;
+     subVectors(&from, &to_ls_d);
+     struct ray3D to_ls;
+     initRay(&to_ls, &from, &to_ls_d);
+
+     double lambda = -1;
+     struct object3D *next_obj;
+     struct point3D next_p;
+     struct point3D next_n;
+     double next_a, next_b;
+     findFirstHit(&to_ls, &lambda, from_obj, &next_obj, &next_p, &next_n, &next_a, &next_b);
+     if (!(lambda > 0 && lambda < 1)) break; // Nothing left between here and the light
+
+     double blocker = next_obj->alpha;
+     if (next_obj->alphaMap)
+     {
+       double m;
+       next_obj->alphMap(next_obj->alphaMap, next_a, next_b, &m);
+       blocker *= m;
+     }
+     transmission *= 1 - blocker;
+
+     // Continue from the blocker's hit point
+     from = next_p;
+     from_obj = next_obj;
+   }
+
    // Skip lights behind the surface: no diffuse, and no spurious highlight from the mirror direction
-   if (!(lambda > 0 && lambda < 1) && n_dot_s > 0)
+   if (transmission > 0 && n_dot_s > 0)
    {
      // Diffuse term (takes the surface colour)
-     double coefficient = obj->alb.rd * n_dot_s;
+     double coefficient = obj->alb.rd * n_dot_s * transmission;
      tmp_col.R += coefficient * ls->col.R * R;
      tmp_col.G += coefficient * ls->col.G * G;
      tmp_col.B += coefficient * ls->col.B * B;
@@ -140,7 +170,7 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
      struct point3D mirror_p_to_ls_d = *n;
      scaleVector(2 * n_dot_s, &mirror_p_to_ls_d);
      subVectors(&p_to_ls_d, &mirror_p_to_ls_d);
-     coefficient = obj->alb.rs * pow(fmax(0, -dot(&ray->d, &mirror_p_to_ls_d)), obj->shinyness);
+     coefficient = obj->alb.rs * pow(fmax(0, -dot(&ray->d, &mirror_p_to_ls_d)), obj->shinyness) * transmission;
      tmp_col.R += coefficient * ls->col.R;
      tmp_col.G += coefficient * ls->col.G;
      tmp_col.B += coefficient * ls->col.B;
@@ -148,7 +178,7 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
 
    ls = ls->next;
  }
- scaleRGBVector(obj->alpha, &tmp_col);
+ scaleRGBVector(opaqueness, &tmp_col);
  //  End of local model computations
 
  //  Global component
@@ -164,7 +194,7 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
 
    struct colourRGB reflection;
    rayTrace(&mirror_r, depth + 1, &reflection, obj);
-   scaleRGBVector(obj->alb.rg, &reflection);
+   scaleRGBVector(obj->alb.rg * opaqueness, &reflection);
    if (reflection.R >= 0)
    {
      tmp_col.R += reflection.R;
@@ -173,7 +203,7 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
    }
 
    // Refracted portion (only for objects that are at least partly transparent)
-   if (obj->alpha < 1)
+   if (opaqueness < 1)
    {
      // From the notes (7.6.3): d_t = r*b + (r*c - sqrt(1 - r^2(1 - c^2)))*n, with b the incident
      // direction, c = -n.b, and r = n1/n2. The formula assumes n faces the incoming ray (c > 0).
@@ -207,7 +237,7 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
        rayTrace(&refracted_r, depth + 1, &refraction, obj);
        if (refraction.R >= 0)	// Negative means no colour (missed everything or hit max depth)
        {
-         scaleRGBVector(1 - obj->alpha, &refraction);
+         scaleRGBVector(1 - opaqueness, &refraction);
          tmp_col.R += refraction.R;
          tmp_col.G += refraction.G;
          tmp_col.B += refraction.B;

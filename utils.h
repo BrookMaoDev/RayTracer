@@ -229,7 +229,7 @@ void loadTexture(struct object3D *o, const char *filename, int type, struct text
 void texMap(struct image *img, double a, double b, double *R, double *G, double *B);
 void normMap(struct image *img, double a, double b, struct point3D *n);
 void sampleNormalMap(struct image *img, double a, double b, double *x_coef, double *y_coef, double *n_coef);
-void alphaMap(struct image *img, double a, double b, double *R, double *G, double *B);
+void alphaMap(struct image *img, double a, double b, double *alpha);
 
 // Functions to insert objects and lights into their respective lists
 void insertObject(struct object3D *o, struct object3D **list);

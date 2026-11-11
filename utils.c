@@ -173,6 +173,7 @@ struct object3D *newPlane(double ra, double rd, double rs, double rg, double r, 
   memcpy(&plane->Tinv[0][0],&eye4x4[0][0],16*sizeof(double));
   plane->textureMap=&texMap;
   plane->normMap = &normMap;
+  plane->alphMap = &alphaMap;
   plane->frontAndBack=1;
   plane->photonMapped=0;
   plane->normalMapped=0;
@@ -221,6 +222,7 @@ struct object3D *newSphere(double ra, double rd, double rs, double rg, double r,
   memcpy(&sphere->Tinv[0][0],&eye4x4[0][0],16*sizeof(double));
   sphere->textureMap=&texMap;
   sphere->normMap = &normMap;
+  sphere->alphMap = &alphaMap;
   sphere->frontAndBack=0;
   sphere->photonMapped=0;
   sphere->normalMapped=0;
@@ -259,6 +261,7 @@ struct object3D *newCyl(double ra, double rd, double rs, double rg, double r, do
     memcpy(&cyl->Tinv[0][0], &eye4x4[0][0], 16 * sizeof(double));
     cyl->textureMap = &texMap;
     cyl->normMap = &normMap;
+    cyl->alphMap = &alphaMap;
     cyl->frontAndBack = 0;
     cyl->photonMapped = 0;
     cyl->normalMapped = 0;
@@ -718,9 +721,28 @@ void alphaMap(struct image *img, double a, double b, double *alpha)
  // coordinates. Your code should use bi-linear
  // interpolation to obtain the texture colour.
  //////////////////////////////////////////////////
- 
- *(alpha)=1;	// Returns 1 which means fully opaque. Replace
- return;	// with your code if implementing alpha maps.
+
+ double *alphas = (double *)img->rgbdata;
+
+ a = fmin(1, fmax(0, a)); // guard against rounding just outside [0,1]
+ b = fmin(1, fmax(0, b));
+
+ double x = a * (img->sx - 1);
+ double y = (1 - b) * (img->sy - 1); // b = 1 (top of object) -> row 0 (top of image)
+
+ int x0 = (int)x, y0 = (int)y;
+ int x1 = (x0 + 1 < img->sx) ? x0 + 1 : x0;
+ int y1 = (y0 + 1 < img->sy) ? y0 + 1 : y0;
+ double fx = x - x0, fy = y - y0;
+
+ const double *p00 = alphas + (y0 * img->sx + x0); // top-left
+ const double *p10 = alphas + (y0 * img->sx + x1); // top-right
+ const double *p01 = alphas + (y1 * img->sx + x0); // bottom-left
+ const double *p11 = alphas + (y1 * img->sx + x1); // bottom-right
+
+ double top = (1 - fx) * *p00 + fx * *p10;
+ double bottom = (1 - fx) * *p01 + fx * *p11;
+ *alpha = (1 - fy) * top + fy * bottom;
 }
 
 

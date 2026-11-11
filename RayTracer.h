@@ -130,6 +130,7 @@ struct object3D{
   	// texture colour at that point using bi-linear interpolation 
 	void (*textureMap)(struct image *img, double a, double b, double *R, double *G, double *B);
 	void (*normMap)(struct image *img, double a, double b, struct point3D *n);
+	void (*alphMap)(struct image *img, double a, double b, double *alpha);
 
 	// Functions to return coordinates on the surface of the object. One takes as input the a and b
         // parameters for the parametric function of the object and returns the (x,y,z) coordinates
