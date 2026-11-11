@@ -358,7 +358,6 @@ void *renderWorker(void *arg)
 
   while ((j = __atomic_fetch_add(&job->next_row, 1, __ATOMIC_RELAXED)) < job->sx)
   {
-    fprintf(stderr, "%d/%d, ", j, sx);
     for (int i = 0; i < sx; i++)
     {
       int N = job->antialiasing ? 4 : 1; // 16 spp vs 1
@@ -556,7 +555,6 @@ int main(int argc, char *argv[])
  struct renderJob job = {
      cam, rgbIm, du, dv, e, background, sx, antialiasing, 0};
 
- fprintf(stderr,"Rendering row: ");
  for (j = 0; j < MAX_THREADS; j++) // For each of the pixels in the image
  {
    if (pthread_create(&threads[j], NULL, renderWorker, &job) != 0)
