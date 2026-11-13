@@ -305,6 +305,20 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
          tmp_col.B += refraction.B;
        }
      }
+     else
+     {
+       // Total internal reflection: the light that would have been transmitted is all reflected
+       // instead (the ray stays in the same medium, like mirror_r)
+       struct colourRGB tir;
+       rayTrace(&mirror_r, depth + 1, &tir, obj);
+       if (tir.R >= 0)
+       {
+         scaleRGBVector(1 - opaqueness, &tir);
+         tmp_col.R += tir.R;
+         tmp_col.G += tir.G;
+         tmp_col.B += tir.B;
+       }
+     }
    }
  }
 
@@ -572,7 +586,20 @@ int main(int argc, char *argv[])
  // and a focal length of -1 (why? where is the image plane?)
  // Note that the top-left corner of the window is at (-2, 2)
  // in camera coordinates.
+#ifndef SCENE_REFRACTION
  cam=setupView(&e, &g, &up, -1, -2, 2, 4);
+#else
+ // The refraction scene (see buildscene.c) gets its own camera: raised a little and looking down
+ // at the objects, with a narrower window (about 70 degrees instead of about 127) so they fill
+ // the frame
+ e.px=0;
+ e.py=1.4;
+ e.pz=-1.5;
+ g.px=0-e.px;
+ g.py=-.6-e.py;
+ g.pz=3-e.pz;
+ cam=setupView(&e, &g, &up, -1, -.7, .7, 1.4);
+#endif
 
  if (cam==NULL)
  {

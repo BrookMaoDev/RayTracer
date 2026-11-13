@@ -27,6 +27,15 @@
  struct pointLS *l;
  struct point3D p;
 
+ // Feature toggles: pick the scene and turn features on with -D when compiling (no flags = the
+ // plain scene with no textures and a point light). demo/scripts/ has a script for each one.
+ //   SCENE_REFRACTION  Use the refraction scene below instead (a marble inside a glass sphere)
+ //   TEXTURES          Texture map every object
+ //   NORMALS           Add the matching normal map to every object
+ //   ALS               Replace the point light with an area light (soft shadows)
+ //   ALPHA             Put a lattice alpha map on both spheres
+
+#ifndef SCENE_REFRACTION
  // Simple scene for Assignment 3:
  // Insert a couple of objects. A plane and two spheres
  // with some transformations.
@@ -40,7 +49,8 @@
  invert(&o->T[0][0],&o->Tinv[0][0]);			// Compute the inverse transform * DON'T FORGET TO DO THIS! *
 
  // If needed, this is how you load a texture map
- loadTexture(o, "./textures/colors/Poliigon_MetalGoldPaint_7253_BaseColor.ppm", 1, &texture_list); // This loads a texture called 'Poliigon_MetalGoldPaint_7253_BaseColor.ppm'. The
+#ifdef TEXTURES
+ loadTexture(o, "./textures/colors/Poliigon_WoodVeneerOak_7760_BaseColor.ppm", 1, &texture_list); // This loads a texture called 'Poliigon_WoodVeneerOak_7760_BaseColor.ppm'. The
 																								   // texture gets added to the texture list, and a
 																								   // pointer to it is stored within this object in the
 																								   // corresponding place. The '1' indicates this image
@@ -51,8 +61,13 @@
 																								   // * DO NOT * try to free image data loaded in this
 																								   // way, the cleanup function already provided will do
 																								   // this at the end.
- loadTexture(o, "./textures/normals/Poliigon_MetalGoldPaint_7253_Normal.ppm", 2, &texture_list);
- //  loadTexture(o, "./textures/alphas/perforated_holes.pgm", 3, &texture_list);
+#endif
+#ifdef NORMALS
+ loadTexture(o, "./textures/normals/Poliigon_WoodVeneerOak_7760_Normal.ppm", 2, &texture_list);
+#endif
+#ifdef ALPHA
+ loadTexture(o, "./textures/alphas/lattice.pgm", 3, &texture_list);
+#endif
  insertObject(o, &object_list); // <-- If you don't insert the object into the object list,
 								//     nothing happens! your object won't be rendered.
 
@@ -62,9 +77,15 @@
  RotateZ(o,-PI/1.5);
  Translate(o,-2.2,1.75,1.35);
  invert(&o->T[0][0],&o->Tinv[0][0]);
- loadTexture(o, "./textures/colors/Poliigon_StoneQuartzite_8060_BaseColor.ppm", 1, &texture_list);
- loadTexture(o, "./textures/normals/Poliigon_StoneQuartzite_8060_Normal.ppm", 2, &texture_list);
- //  loadTexture(o, "./textures/alphas/perforated_holes.pgm", 3, &texture_list);
+#ifdef TEXTURES
+ loadTexture(o, "./textures/colors/Poliigon_MetalGoldPaint_7253_BaseColor.ppm", 1, &texture_list);
+#endif
+#ifdef NORMALS
+ loadTexture(o, "./textures/normals/Poliigon_MetalGoldPaint_7253_Normal.ppm", 2, &texture_list);
+#endif
+#ifdef ALPHA
+ loadTexture(o, "./textures/alphas/lattice.pgm", 3, &texture_list);
+#endif
  insertObject(o, &object_list);
 
  o=newPlane(.05,.75,.05,.05,.55,.8,.75,1,1,2);
@@ -73,22 +94,106 @@
  RotateX(o, -PI / 2);
  Translate(o,0,-4,5);
  invert(&o->T[0][0],&o->Tinv[0][0]);
- loadTexture(o, "./textures/colors/Poliigon_WoodVeneerOak_7760_BaseColor.ppm", 1, &texture_list);
- loadTexture(o, "./textures/normals/Poliigon_WoodVeneerOak_7760_Normal.ppm", 2, &texture_list);
+#ifdef TEXTURES
+ loadTexture(o, "./textures/colors/Poliigon_StoneQuartzite_8060_BaseColor.ppm", 1, &texture_list);
+#endif
+#ifdef NORMALS
+ loadTexture(o, "./textures/normals/Poliigon_StoneQuartzite_8060_Normal.ppm", 2, &texture_list);
+#endif
  insertObject(o,&object_list);
 
  // Insert a single point light source. We set up its position as a point structure, and specify its
  // colour in terms of RGB (in [0,1]).
- // p.px=0;
- // p.py=25.5;
- // p.pz=-3.5;
- // p.pw=1;
- // l=newPLS(&p,.95,.95,.95);
- // insertPLS(l,&light_list);
+#ifndef ALS
+ p.px=0;
+ p.py=25.5;
+ p.pz=-3.5;
+ p.pw=1;
+ l=newPLS(&p,.95,.95,.95);
+ insertPLS(l,&light_list);
+#else
+ // Area light in place of the point light above: a 4x4 rectangle at the same position, facing
+ // down, sampled with 64 point lights per shading call. Render with antialiasing on so each
+ // pixel averages 16 x 64 light samples and the penumbra is smooth.
+ addAreaLight(4, 4, 0, -1, 0, 0, 25.5, -3.5, 64, .95, .95, .95, &object_list, &light_list);
+#endif
+#else
+ // Refraction scene: a glass marble inside a larger glass sphere on a wooden table, in front of a marble wall
+ // Note the parameters: ra, rd, rs, rg, R, G, B, alpha, r_index, and shinyness)
 
- // Area light in place of the point light above: a 6x6 rectangle at the same position, facing
- // down, sampled with 64 point lights per shading call
- addAreaLight(6, 6, 0, -1, 0, 0, 25.5, -3.5, 64, .95, .95, .95, &object_list, &light_list);
+ // Table
+ o=newPlane(.1,.8,.1,.05,1,1,1,1,1,4);
+ Scale(o,10,10,10);
+ RotateX(o,-PI/2);
+ Translate(o,0,-1.5,6);
+ invert(&o->T[0][0],&o->Tinv[0][0]);
+ loadTexture(o, "./textures/colors/Poliigon_WoodVeneerOak_7760_BaseColor.ppm", 1, &texture_list);
+ insertObject(o,&object_list);
+
+ // Wall
+ o=newPlane(.1,.8,.1,.05,1,1,1,1,1,4);
+ Scale(o,10,10,10);
+ Translate(o,0,7,8);
+ invert(&o->T[0][0],&o->Tinv[0][0]);
+ loadTexture(o, "./textures/colors/Poliigon_StoneQuartzite_8060_BaseColor.ppm", 1, &texture_list);
+ insertObject(o,&object_list);
+
+ // The rest of the room: walls behind and beside the camera and a ceiling above the light. The
+ // camera never sees these directly, but without them the glass reflects the black background.
+ o=newPlane(.3,.6,0,0,.85,.83,.8,1,1,1);	// Behind the camera
+ Scale(o,10,10,10);
+ Translate(o,0,7,-6);
+ invert(&o->T[0][0],&o->Tinv[0][0]);
+ insertObject(o,&object_list);
+
+ o=newPlane(.3,.6,0,0,.85,.83,.8,1,1,1);	// Left
+ Scale(o,10,10,10);
+ RotateY(o,PI/2);
+ Translate(o,-7,7,1);
+ invert(&o->T[0][0],&o->Tinv[0][0]);
+ insertObject(o,&object_list);
+
+ o=newPlane(.3,.6,0,0,.85,.83,.8,1,1,1);	// Right
+ Scale(o,10,10,10);
+ RotateY(o,PI/2);
+ Translate(o,7,7,1);
+ invert(&o->T[0][0],&o->Tinv[0][0]);
+ insertObject(o,&object_list);
+
+ o=newPlane(.3,.6,0,0,.85,.83,.8,1,1,1);	// Ceiling
+ Scale(o,10,10,10);
+ RotateX(o,-PI/2);
+ Translate(o,0,12,1);
+ invert(&o->T[0][0],&o->Tinv[0][0]);
+ insertObject(o,&object_list);
+
+ // Two nested objects: a clear glass sphere (n = 1.5) with a blue marble of denser glass
+ // (n = 1.9) inside it. Each ray keeps a stack of the objects it is inside, so every surface it
+ // crosses uses the right indices on both sides (air -> glass -> marble -> glass -> air). The
+ // marble sits strictly inside the outer sphere so their surfaces never touch.
+
+ // Outer sphere: radius 1.2, resting on the table (y = -1.5)
+ o=newSphere(.02,.1,.6,.3,.9,.95,1,.1,1.5,80);
+ Scale(o,1.2,1.2,1.2);
+ Translate(o,0,-.299,1.8);
+ invert(&o->T[0][0],&o->Tinv[0][0]);
+ insertObject(o,&object_list);
+
+ // Inner marble: blue glass, at the centre of the outer sphere
+ o=newSphere(.1,.7,.8,.3,.1,.35,.95,.5,1.9,100);
+ Scale(o,.35,.35,.35);
+ Translate(o,0,-.299,1.8);
+ invert(&o->T[0][0],&o->Tinv[0][0]);
+ insertObject(o,&object_list);
+
+ // Key light up and to the left, behind the camera
+ p.px=-4;
+ p.py=10;
+ p.pz=-2;
+ p.pw=1;
+ l=newPLS(&p,.95,.95,.95);
+ insertPLS(l,&light_list);
+#endif
 
  // End of simple scene for Assignment 2
  // Keep in mind that you can define new types of objects such as cylinders and parametric surfaces,
