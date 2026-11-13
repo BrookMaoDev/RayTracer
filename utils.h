@@ -240,6 +240,12 @@ void addAreaLight(double sx, double sy, double nx, double ny, double nz,
                   double tx, double ty, double tz, int N,
                   double r, double g, double b, struct object3D **o_list, struct pointLS **l_list);
 
+// Fibonacci word fractal helpers. fibonacci(n) is the nth Fibonacci number (fibonacci(0) = 0,
+// fibonacci(1) = 1). fibonacciWord(n, word) writes the nth Fibonacci word (0, 01, 010, 01001, ...)
+// into word, which needs room for fibonacci(n+2) characters plus the null terminator.
+long fibonacci(int n);
+void fibonacciWord(int n, char *word);
+
 // Function to set up the camera and viewing coordinate frame.
 // You will have to add code to this function's body in utils.c
 struct view *setupView(struct point3D *e, struct point3D *g, struct point3D *up, double f, double wl, double wt, double wsize);

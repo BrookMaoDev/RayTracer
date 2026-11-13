@@ -199,24 +199,8 @@
  // with 01 and every 1 with 0 (0, 01, 010, 01001, ...). The fractal is drawn by walking the word:
  // take a step forward on every digit, and on a 0 also turn left if the step is even and right
  // if it is odd.
- // TODO: generate the word and place objects along the path. This file is pasted into the body of
- //       buildScene() in RayTracer.c, so a recursive helper has to be defined outside it (e.g.
- //       above buildScene() in RayTracer.c, or in utils.c with a prototype in utils.h).
-
- // Placeholder floor so the scene renders something until the fractal is added
- o=newPlane(.05,.75,.05,.05,.55,.8,.75,1,1,2);
- Scale(o,11,11,11);
- RotateX(o,-PI/2);
- Translate(o,0,-4,5);
- invert(&o->T[0][0],&o->Tinv[0][0]);
- insertObject(o,&object_list);
-
- p.px=0;
- p.py=25.5;
- p.pz=-3.5;
- p.pw=1;
- l=newPLS(&p,.95,.95,.95);
- insertPLS(l,&light_list);
+ // TODO: generate the word with fibonacci() and fibonacciWord() (utils.c) and place objects
+ //       along the path.
 #endif
 
  // End of simple scene for Assignment 2

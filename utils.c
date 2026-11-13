@@ -849,6 +849,41 @@ void addAreaLight(double sx, double sy, double nx, double ny, double nz,\
  insertObject(rect, o_list);
 }
 
+long fibonacci(int n)
+{
+ // Returns the nth Fibonacci number, with fibonacci(0) = 0 and fibonacci(1) = 1
+ long a = 0, b = 1, t;
+ for (int i = 0; i < n; i++)
+ {
+  t = a + b;
+  a = b;
+  b = t;
+ }
+ return a;
+}
+
+void fibonacciWord(int n, char *word)
+{
+ // Writes the nth Fibonacci word into word as a null-terminated string of '0's and '1's.
+ // Word 0 is "0", and each generation replaces every 0 with 01 and every 1 with 0:
+ //   0, 01, 010, 01001, 01001010, ...
+ // Applying that rule to a word gives the next one, which works out to the previous two words
+ // joined together: word(n) = word(n-1) followed by word(n-2). word must have room for
+ // fibonacci(n+2) characters plus the null terminator.
+ if (n == 0)
+ {
+  strcpy(word, "0");
+  return;
+ }
+ if (n == 1)
+ {
+  strcpy(word, "01");
+  return;
+ }
+ fibonacciWord(n - 1, word);
+ fibonacciWord(n - 2, word + fibonacci(n + 1));	// Overwrites word(n-1)'s null terminator
+}
+
 ///////////////////////////////////
 // Geometric transformation section
 ///////////////////////////////////
