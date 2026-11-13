@@ -199,8 +199,36 @@
  // with 01 and every 1 with 0 (0, 01, 010, 01001, ...). The fractal is drawn by walking the word:
  // take a step forward on every digit, and on a 0 also turn left if the step is even and right
  // if it is odd.
- // TODO: generate the word with fibonacci() and fibonacciWord() (utils.c) and place objects
- //       along the path.
+ int n = 14;
+ long len = fibonacci(n + 2);
+ char *word = (char *)malloc(len + 1); // +1 for the '\0'
+ fibonacciWord(n, word);
+
+ double parent[4][4] = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
+ TranslateMat(parent, -69, 70, 0);
+ RotateXMat(parent, PI / 6);
+ TranslateMat(parent, 0, 18, 72);
+
+ for (long k = 0; k <= len; k++)
+ {
+	 if (k > 0)
+	 {
+		 double child[4][4] = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
+		 if (word[k - 1] == '0')
+			 RotateZMat(child, k % 2 == 0 ? PI / 2 : -PI / 2);
+		 TranslateMat(child, 2, 0, 0);
+		 matMult(parent, child);
+		 memcpy(parent, child, 16 * sizeof(double));
+	 }
+
+	 o = newPlane(.1, .8, .3, .05, .95, .75, .2, 1, 1, 10);
+	 memcpy(o->T, parent, 16 * sizeof(double));
+	 invert(&o->T[0][0], &o->Tinv[0][0]);
+	 insertObject(o, &object_list);
+ }
+ free(word);
+
+ addAreaLight(20, 20, 0, -40, 85, 0, 50, -10, 64, .95, .95, .95, &object_list, &light_list);
 #endif
 
  // End of simple scene for Assignment 2
