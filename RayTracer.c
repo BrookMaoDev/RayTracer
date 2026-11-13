@@ -227,6 +227,9 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
 
    struct ray3D mirror_r;
    initRay(&mirror_r, p, &mirror_d);
+   // A reflected ray stays on the same side of the surface, so it is in the same media
+   mirror_r.numInside = ray->numInside;
+   memcpy(mirror_r.inside, ray->inside, ray->numInside * sizeof(struct object3D *));
 
    struct colourRGB reflection;
    rayTrace(&mirror_r, depth + 1, &reflection, obj);
@@ -245,15 +248,36 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
      // direction, c = -n.b, and r = n1/n2. The formula assumes n faces the incoming ray (c > 0).
      struct point3D n_facing = *n;
      double c = -dot(n, &ray->d);
-     double n1 = 1, n2 = obj->r_index;	// Entering the object from air
      if (c < 0)
      {
-       // Leaving the object: flip the normal to face the ray, and swap the media
+       // Hit from the back: flip the normal to face the ray
        scaleVector(-1, &n_facing);
        c = -c;
-       n1 = obj->r_index;
-       n2 = 1;
      }
+
+     // Work out the media on each side from the ray's stack of objects it is inside (top = the
+     // medium it is in now, empty = air). Crossing a solid's surface leaves it if it's anywhere
+     // in the stack (removed from wherever it is, so overlapping objects work too), and enters
+     // it otherwise. Thin surfaces like planes leave the stack alone, so n1 == n2 and the ray
+     // passes straight through.
+     struct object3D *media[MAX_MEDIA];
+     int num_media = ray->numInside;
+     memcpy(media, ray->inside, num_media * sizeof(struct object3D *));
+     double n1 = (num_media > 0) ? media[num_media - 1]->r_index : 1;
+     if (obj->isSolid)
+     {
+       int idx = -1;
+       for (int i = 0; i < num_media; i++)
+         if (media[i] == obj) idx = i;
+       if (idx >= 0)
+       {
+         for (int i = idx; i < num_media - 1; i++) media[i] = media[i + 1];
+         num_media--;
+       }
+       else if (num_media < MAX_MEDIA)
+         media[num_media++] = obj;
+     }
+     double n2 = (num_media > 0) ? media[num_media - 1]->r_index : 1;
      double r = n1 / n2;
      double k = 1 - r * r * (1 - c * c);
 
@@ -268,6 +292,8 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
 
        struct ray3D refracted_r;
        initRay(&refracted_r, p, &refracted_d);
+       refracted_r.numInside = num_media;
+       memcpy(refracted_r.inside, media, num_media * sizeof(struct object3D *));
 
        struct colourRGB refraction;
        rayTrace(&refracted_r, depth + 1, &refraction, obj);

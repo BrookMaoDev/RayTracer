@@ -55,9 +55,19 @@ struct point3D{
 	double pw;
 };
 
+// Maximum number of nested solid objects a ray can be inside at once
+#define MAX_MEDIA 16
+
+struct object3D;
+
 /* The structure below defines a ray in 3D homogeneous coordinates,
    the point corresponds to the representation r(\lambda)=p+(\lambda)d */
 struct ray3D{
+	// Stack of solid objects this ray is currently inside, most recently entered last.
+	// Empty means the ray is travelling through air. Used to pick refraction indices.
+	struct object3D *inside[MAX_MEDIA];
+	int numInside;
+
 	struct point3D p0;	// Ray origin (at lambda=0)
 	struct point3D d;		// Ray direction
 	void (*rayPos)(struct ray3D *ray, double lambda, struct point3D *pos);
@@ -154,6 +164,8 @@ struct object3D{
 					// should be lit.
 	int	isLightSource;		// Flag to indicate if this is an area light source
 	int	lightSamples;		// Area lights only: point lights sampled from the surface per shading call
+	int	isSolid;		// 1 if the object encloses a volume a ray can be inside (sphere, capped cylinder),
+					// 0 for thin surfaces (plane) that refracted rays pass straight through
 	int isCSG;			// Object is part of a CSG composite object. Links to components via CSGnext
 	int photonMapped;		// This object accumulates photons under photon mapping
 	int normalMapped;		// This object has an associated normal map

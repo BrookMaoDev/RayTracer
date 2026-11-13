@@ -184,6 +184,7 @@ struct object3D *newPlane(double ra, double rd, double rs, double rg, double r, 
   plane->normalMapped=0;
   plane->isCSG=0;
   plane->isLightSource=0;
+  plane->isSolid=0;
   plane->CSGnext=NULL;
   plane->next=NULL;
 }
@@ -233,6 +234,7 @@ struct object3D *newSphere(double ra, double rd, double rs, double rg, double r,
   sphere->normalMapped=0;
   sphere->isCSG=0;
   sphere->isLightSource=0;
+  sphere->isSolid=1;
   sphere->CSGnext=NULL;
   sphere->next=NULL; }
  return(sphere);
@@ -272,6 +274,7 @@ struct object3D *newCyl(double ra, double rd, double rs, double rg, double r, do
     cyl->normalMapped = 0;
     cyl->isCSG = 0;
     cyl->isLightSource = 0;
+    cyl->isSolid = 1;
     cyl->CSGnext = NULL;
     cyl->next = NULL;
   }
