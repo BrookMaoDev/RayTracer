@@ -30,12 +30,13 @@
  // Feature toggles: pick the scene and turn features on with -D when compiling (no flags = the
  // plain scene with no textures and a point light). demo/scripts/ has a script for each one.
  //   SCENE_REFRACTION  Use the refraction scene below instead (a marble inside a glass sphere)
+ //   SCENE_FIBONACCI   Use the Fibonacci word fractal scene below instead
  //   TEXTURES          Texture map every object
  //   NORMALS           Add the matching normal map to every object
  //   ALS               Replace the point light with an area light (soft shadows)
  //   ALPHA             Put a lattice alpha map on both spheres
 
-#ifndef SCENE_REFRACTION
+#if !defined(SCENE_REFRACTION) && !defined(SCENE_FIBONACCI)
  // Simple scene for Assignment 3:
  // Insert a couple of objects. A plane and two spheres
  // with some transformations.
@@ -117,7 +118,7 @@
  // pixel averages 16 x 64 light samples and the penumbra is smooth.
  addAreaLight(4, 4, 0, -1, 0, 0, 25.5, -3.5, 64, .95, .95, .95, &object_list, &light_list);
 #endif
-#else
+#elif defined(SCENE_REFRACTION)
  // Refraction scene: a glass marble inside a larger glass sphere on a wooden table, in front of a marble wall
  // Note the parameters: ra, rd, rs, rg, R, G, B, alpha, r_index, and shinyness)
 
@@ -190,6 +191,29 @@
  p.px=-4;
  p.py=10;
  p.pz=-2;
+ p.pw=1;
+ l=newPLS(&p,.95,.95,.95);
+ insertPLS(l,&light_list);
+#else
+ // Fibonacci word fractal scene. The word starts as "0", and each generation replaces every 0
+ // with 01 and every 1 with 0 (0, 01, 010, 01001, ...). The fractal is drawn by walking the word:
+ // take a step forward on every digit, and on a 0 also turn left if the step is even and right
+ // if it is odd.
+ // TODO: generate the word and place objects along the path. This file is pasted into the body of
+ //       buildScene() in RayTracer.c, so a recursive helper has to be defined outside it (e.g.
+ //       above buildScene() in RayTracer.c, or in utils.c with a prototype in utils.h).
+
+ // Placeholder floor so the scene renders something until the fractal is added
+ o=newPlane(.05,.75,.05,.05,.55,.8,.75,1,1,2);
+ Scale(o,11,11,11);
+ RotateX(o,-PI/2);
+ Translate(o,0,-4,5);
+ invert(&o->T[0][0],&o->Tinv[0][0]);
+ insertObject(o,&object_list);
+
+ p.px=0;
+ p.py=25.5;
+ p.pz=-3.5;
  p.pw=1;
  l=newPLS(&p,.95,.95,.95);
  insertPLS(l,&light_list);

@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 mkdir -p ../logs
 
 pids=""
-for s in base antialiasing texture_mapping normal_mapping area_light alpha_mapping refraction; do
+for s in base antialiasing texture_mapping normal_mapping area_light alpha_mapping refraction fibonacci_word; do
   ./$s.sh > ../logs/$s.log 2>&1 &
   pids="$pids $!:$s"
 done
