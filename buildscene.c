@@ -199,15 +199,15 @@
  // with 01 and every 1 with 0 (0, 01, 010, 01001, ...). The fractal is drawn by walking the word:
  // take a step forward on every digit, and on a 0 also turn left if the step is even and right
  // if it is odd.
- int n = 14;
+ int n = 18;
  long len = fibonacci(n + 2);
  char *word = (char *)malloc(len + 1); // +1 for the '\0'
  fibonacciWord(n, word);
 
  double parent[4][4] = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
- TranslateMat(parent, -69, 70, 0);
+ TranslateMat(parent, -239, 168, 0);
  RotateXMat(parent, PI / 6);
- TranslateMat(parent, 0, 18, 72);
+ TranslateMat(parent, 0, 50, 220);
 
  for (long k = 0; k <= len; k++)
  {
@@ -228,7 +228,7 @@
  }
  free(word);
 
- addAreaLight(20, 20, 0, -40, 85, 0, 50, -10, 64, .95, .95, .95, &object_list, &light_list);
+ addAreaLight(70, 70, 0, -40, 85, 0, 160, -35, 64, .95, .95, .95, &object_list, &light_list);
 #endif
 
  // End of simple scene for Assignment 2
