@@ -3,4 +3,4 @@
 . "$(dirname "$0")/common.sh"
 
 build fibonacci_word -DSCENE_FIBONACCI
-render fibonacci_word 3 1
+render fibonacci_word 10 1

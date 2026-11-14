@@ -61,6 +61,11 @@ struct bvhNode *bvh_root;
 struct object3D **bvh_unbounded;
 int bvh_n_unbounded;
 
+// The area lights (light-source objects with lightSamples > 0) in object_list, collected once after
+// the scene is set up so shading doesn't walk the whole object list to find them on every call.
+struct object3D **area_lights;
+int n_area_lights;
+
 // Ambient light intensity. Kept at white so an ambient albedo of 1 gives the flat object colour.
 static const struct colourRGB ambient_light = {1, 1, 1};
 
@@ -129,15 +134,15 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
  // samples live on the stack and are chained in front of light_list, so the loop below sees
  // them followed by the regular point lights, and light_list itself is never modified.
  int num_samples = 0;
- for (struct object3D *o = object_list; o != NULL; o = o->next)
-   if (o->isLightSource && o->lightSamples > 0) num_samples += o->lightSamples;
+ for (int i = 0; i < n_area_lights; i++)
+   num_samples += area_lights[i]->lightSamples;
 
  struct pointLS samples[num_samples > 0 ? num_samples : 1];
  struct pointLS *head = light_list;
  int k = 0;
- for (struct object3D *o = object_list; o != NULL; o = o->next)
+ for (int i = 0; i < n_area_lights; i++)
  {
-   if (!o->isLightSource || o->lightSamples <= 0) continue;
+   struct object3D *o = area_lights[i];
    double w = 1.0 / o->lightSamples;
    for (int s = 0; s < o->lightSamples; s++, k++)
    {
@@ -182,17 +187,20 @@ void rtShade(struct object3D *obj, struct point3D *p, struct point3D *n, struct 
      findFirstHit(&to_ls, &lambda, from_obj, &next_obj, &next_p, &next_n, &next_a, &next_b);
      if (!(lambda > 0 && lambda < 1)) break; // Nothing left between here and the light
 
-     if (!next_obj->isLightSource)
+     // Reaching any light's surface means the light is reached. Samples lie on the light's
+     // own surface, so continuing from there would leave a zero-length shadow ray (which a
+     // sphere light turns into an endless loop).
+     if (next_obj->isLightSource)
+       break;
+
+     double blocker = next_obj->alpha;
+     if (next_obj->alphaMap)
      {
-       double blocker = next_obj->alpha;
-       if (next_obj->alphaMap)
-       {
-         double m;
-         next_obj->alphMap(next_obj->alphaMap, next_a, next_b, &m);
-         blocker *= m;
-       }
-       transmission *= 1 - blocker;
+       double m;
+       next_obj->alphMap(next_obj->alphaMap, next_a, next_b, &m);
+       blocker *= m;
      }
+     transmission *= 1 - blocker;
 
      // Continue from the blocker's hit point
      from = next_p;
@@ -536,6 +544,16 @@ int main(int argc, char *argv[])
  // Build the BVH now that every object has its final transform. It must exist before any rays are traced.
  bvh_root = buildBVH(object_list, &bvh_unbounded, &bvh_n_unbounded);
 
+ n_area_lights = 0;
+ for (struct object3D *o = object_list; o != NULL; o = o->next)
+   if (o->isLightSource && o->lightSamples > 0)
+     n_area_lights++;
+ area_lights = (struct object3D **)malloc((n_area_lights > 0 ? n_area_lights : 1) * sizeof(struct object3D *));
+ n_area_lights = 0;
+ for (struct object3D *o = object_list; o != NULL; o = o->next)
+   if (o->isLightSource && o->lightSamples > 0)
+     area_lights[n_area_lights++] = o;
+
  //////////////////////////////////////////
  // TO DO: For Assignment 2 you can use the setup
  //        already provided here. For Assignment 3
@@ -574,7 +592,17 @@ int main(int argc, char *argv[])
  // and a focal length of -1 (why? where is the image plane?)
  // Note that the top-left corner of the window is at (-2, 2)
  // in camera coordinates.
-#ifndef SCENE_REFRACTION
+#if defined(SCENE_FIBONACCI)
+ // The floating building scene (see buildscene.c) gets a low camera near the ground, under the
+ // building's front edge, looking up at its underside with a 90 degree window
+ e.px = -10;
+ e.py = 2;
+ e.pz = -12;
+ g.px = 0 - e.px;
+ g.py = 28.7 - e.py;
+ g.pz = 22 - e.pz;
+ cam = setupView(&e, &g, &up, -1, -1, 1, 2);
+#elif !defined(SCENE_REFRACTION)
  cam=setupView(&e, &g, &up, -1, -2, 2, 4);
 #else
  // The refraction scene (see buildscene.c) gets its own camera: raised a little and looking down
@@ -594,6 +622,7 @@ int main(int argc, char *argv[])
   fprintf(stderr,"Unable to set up the view and camera parameters. Our of memory!\n");
   freeBVH(bvh_root);
   free(bvh_unbounded);
+  free(area_lights);
   cleanup(object_list,light_list, texture_list);
   deleteImage(im);
   exit(0);
@@ -654,6 +683,7 @@ int main(int argc, char *argv[])
  // Exit section. Clean up and return.
  freeBVH(bvh_root);					// BVH (before the objects it points to)
  free(bvh_unbounded);
+ free(area_lights);
  cleanup(object_list,light_list,texture_list);		// Object, light, and texture lists
  deleteImage(im);					// Rendered image
  free(cam);						// camera view

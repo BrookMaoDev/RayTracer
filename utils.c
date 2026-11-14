@@ -559,12 +559,14 @@ void sphereSample(struct object3D *sphere, double *x, double *y, double *z)
  // Sampling should be uniform - note that this is tricky for a sphere, do some
  // research and document in your report what method is used to do this, along
  // with a reference to your source.
- 
- /////////////////////////////////
- // TO DO: Complete this function.
- /////////////////////////////////
- double a = randUnit();
- double b = randUnit();
+
+ // Picking the latitude b uniformly would bunch points at the poles. Instead pick the height
+ // z = sin(b) uniformly in [-1, 1]: by Archimedes' hat-box theorem, slices of the sphere of equal
+ // height have equal area, so this (with a uniform longitude a) is uniform over the surface.
+ // Reference: Weisstein, "Sphere Point Picking", MathWorld,
+ // https://mathworld.wolfram.com/SpherePointPicking.html
+ double a = 2 * PI * randUnit();
+ double b = asin(2 * randUnit() - 1);
  sphereCoordinates(sphere, a, b, x, y, z);
 }
 

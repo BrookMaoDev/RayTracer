@@ -204,10 +204,110 @@
  char *word = (char *)malloc(len + 1); // +1 for the '\0'
  fibonacciWord(n, word);
 
+ o = newPlane(.3, .8, .05, 0, 1, 1, 1, 1, 1, 2);
+ Scale(o, 250, 250, 1);
+ RotateX(o, -PI / 2);
+ Translate(o, 0, 0, -50);
+ invert(&o->T[0][0], &o->Tinv[0][0]);
+ loadTexture(o, "./textures/colors/Poliigon_ConcreteFloorPoured_7656_BaseColor.ppm", 1, &texture_list);
+ loadTexture(o, "./textures/normals/Poliigon_ConcreteFloorPoured_7656_Normal.ppm", 2, &texture_list);
+ insertObject(o, &object_list);
+
+ o = newPlane(1, 0, 0, 0, 1, 1, 1, 1, 1, 1);
+ Scale(o, 500, 500, 1);
+ RotateX(o, -.7);
+ Translate(o, 0, 0, 200);
+ invert(&o->T[0][0], &o->Tinv[0][0]);
+ loadTexture(o, "./textures/colors/sky_68_2k_cropped.ppm", 1, &texture_list);
+ insertObject(o, &object_list);
+
+ double bottom = 40, height = 12, half_w = 35, half_d = 26, centre_z = 16;
+
+ o = newPlane(.2, .8, .1, 0, 1, 1, 1, 1, 1, 4);
+ Scale(o, half_w, half_d, 1);
+ RotateX(o, PI / 2);
+ Translate(o, 0, bottom, centre_z);
+ invert(&o->T[0][0], &o->Tinv[0][0]);
+ loadTexture(o, "./textures/colors/Poliigon_ConcreteWorn_8690_BaseColor.ppm", 1, &texture_list);
+ loadTexture(o, "./textures/normals/Poliigon_ConcreteWorn_8690_Normal.ppm", 2, &texture_list);
+ insertObject(o, &object_list);
+
+ o = newPlane(.2, .8, .1, 0, 1, 1, 1, 1, 1, 4);
+ Scale(o, half_w, half_d, 1);
+ RotateX(o, PI / 2);
+ Translate(o, 0, bottom + height, centre_z);
+ invert(&o->T[0][0], &o->Tinv[0][0]);
+ loadTexture(o, "./textures/colors/Poliigon_ConcreteWorn_8690_BaseColor.ppm", 1, &texture_list);
+ loadTexture(o, "./textures/normals/Poliigon_ConcreteWorn_8690_Normal.ppm", 2, &texture_list);
+ insertObject(o, &object_list);
+
+ for (int side = 0; side < 4; side++)
+ {
+	 o = newPlane(.2, .8, .1, 0, 1, 1, 1, 1, 1, 4);
+	 if (side < 2)
+	 {
+		 Scale(o, half_w, height / 2, 1);
+		 Translate(o, 0, bottom + height / 2, centre_z + (side == 0 ? -half_d : half_d));
+	 }
+	 else
+	 {
+		 Scale(o, half_d, height / 2, 1);
+		 RotateY(o, PI / 2);
+		 Translate(o, side == 2 ? -half_w : half_w, bottom + height / 2, centre_z);
+	 }
+	 invert(&o->T[0][0], &o->Tinv[0][0]);
+	 loadTexture(o, "./textures/colors/Poliigon_ConcreteWorn_8690_BaseColor.ppm", 1, &texture_list);
+	 loadTexture(o, "./textures/normals/Poliigon_ConcreteWorn_8690_Normal.ppm", 2, &texture_list);
+	 loadTexture(o, "./textures/alphas/windows.pgm", 3, &texture_list);
+	 insertObject(o, &object_list);
+ }
+
+ double legs[9][4] = {
+	 {-75, -5, -18, 2},
+	 {-62, 8, -12, 12},
+	 {-38, 40, -10, 30},
+	 {20, 22, -4, 10},
+	 {-2, 55, 4, 40},
+	 {22, 30, 22, 30},
+	 {40, 18, 16, 26},
+	 {68, 40, 28, 24},
+	 {62, 60, 26, 38}};
+ double leg_colours[9][3] = {
+	 {.05, .05, .06},
+	 {.1, .3, .9},
+	 {.12, .12, .14},
+	 {.55, .3, .95},
+	 {.95, .75, .1},
+	 {.05, .05, .06},
+	 {.92, .92, .9},
+	 {.85, .15, .12},
+	 {.9, .95, 1}};
+ for (int i = 0; i < 9; i++)
+ {
+	 double dx = legs[i][2] - legs[i][0], dy = bottom + 4, dz = legs[i][3] - legs[i][1];
+	 double leg_len = sqrt(dx * dx + dy * dy + dz * dz);
+	 if (i == 3)
+		 o = newCyl(.05, .3, .7, .2, leg_colours[i][0], leg_colours[i][1], leg_colours[i][2], .3, 1.5, 80);
+	 else if (i == 8)
+		 o = newCyl(.02, .1, .7, .3, leg_colours[i][0], leg_colours[i][1], leg_colours[i][2], .1, 1.5, 80);
+	 else
+		 o = newCyl(.1, .7, .5, .1, leg_colours[i][0], leg_colours[i][1], leg_colours[i][2], 1, 1, 40);
+	 Scale(o, 1.5, 1.5, leg_len / 2);
+	 RotateX(o, -asin(dy / leg_len));
+	 RotateY(o, atan2(dx, dz));
+	 Translate(o, (legs[i][0] + legs[i][2]) / 2, dy / 2 - 2, (legs[i][1] + legs[i][3]) / 2);
+	 invert(&o->T[0][0], &o->Tinv[0][0]);
+	 insertObject(o, &object_list);
+ }
+
+ addAreaLight(60, 60, 0, 35, 96, 0, 5, -80, 16, 1, .9, .85, &object_list, &light_list);
+ addAreaLight(50, 50, -200, -130, 66, 200, 150, -50, 16, .6, .55, .6, &object_list, &light_list);
+
  double parent[4][4] = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
  TranslateMat(parent, -239, 168, 0);
- RotateXMat(parent, PI / 6);
- TranslateMat(parent, 0, 50, 220);
+ ScaleMat(parent, .13, .13, 1);
+ RotateXMat(parent, PI / 2);
+ TranslateMat(parent, 0, bottom - .05, centre_z);
 
  for (long k = 0; k <= len; k++)
  {
@@ -221,14 +321,12 @@
 		 memcpy(parent, child, 16 * sizeof(double));
 	 }
 
-	 o = newPlane(.1, .8, .3, .05, .95, .75, .2, 1, 1, 10);
+	 o = newPlane(.1, .6, .3, .05, .05, .05, .06, 1, 1, 20);
 	 memcpy(o->T, parent, 16 * sizeof(double));
 	 invert(&o->T[0][0], &o->Tinv[0][0]);
 	 insertObject(o, &object_list);
  }
  free(word);
-
- addAreaLight(70, 70, 0, -40, 85, 0, 160, -35, 64, .95, .95, .95, &object_list, &light_list);
 #endif
 
  // End of simple scene for Assignment 2
