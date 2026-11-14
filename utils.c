@@ -849,6 +849,321 @@ void addAreaLight(double sx, double sy, double nx, double ny, double nz,\
  insertObject(rect, o_list);
 }
 
+int objectBounds(struct object3D *obj, struct aabb *box)
+{
+ // Computes the world-space axis-aligned bounding box of obj. The canonical object's box is
+ // known for each object type; transforming its 8 corners by T and taking the min/max of the
+ // results gives a box that encloses the transformed object (possibly a bit loosely if the
+ // object is rotated). Returns 1 on success, or 0 if obj is of a type with no known bounds.
+ double cmin[3], cmax[3];	// Canonical box
+ int c, i;
+
+ if (obj->intersect == &sphereIntersect || obj->intersect == &cylIntersect)
+ {
+  // Unit sphere at the origin, and the cylinder x^2 + y^2 <= 1, |z| <= 1
+  for (i = 0; i < 3; i++)
+  {
+   cmin[i] = -1;
+   cmax[i] = 1;
+  }
+ }
+ else if (obj->intersect == &planeIntersect)
+ {
+  // Finite plane on z = 0. The box has zero thickness in z, which padding below fixes.
+  cmin[0] = plane_left;
+  cmax[0] = plane_right;
+  cmin[1] = plane_bottom;
+  cmax[1] = plane_top;
+  cmin[2] = 0;
+  cmax[2] = 0;
+ }
+ else return 0;
+
+ for (i = 0; i < 3; i++)
+ {
+  box->min[i] = INFINITY;
+  box->max[i] = -INFINITY;
+ }
+
+ // Corner c picks min or max on each axis from its bits: bit 0 for x, bit 1 for y, bit 2 for z
+ for (c = 0; c < 8; c++)
+ {
+  struct point3D corner;
+  corner.px = (c & 1) ? cmax[0] : cmin[0];
+  corner.py = (c & 2) ? cmax[1] : cmin[1];
+  corner.pz = (c & 4) ? cmax[2] : cmin[2];
+  corner.pw = 1;
+  matVecMult(obj->T, &corner);
+
+  double v[3] = {corner.px, corner.py, corner.pz};
+  for (i = 0; i < 3; i++)
+  {
+   box->min[i] = fmin(box->min[i], v[i]);
+   box->max[i] = fmax(box->max[i], v[i]);
+  }
+ }
+
+ // Pad slightly so flat boxes (axis-aligned planes) have some thickness and rounding in the
+ // ray-box test can't miss a hit that lies exactly on the box boundary
+ for (i = 0; i < 3; i++)
+ {
+  box->min[i] -= EPSILON;
+  box->max[i] += EPSILON;
+ }
+ return 1;
+}
+
+// Axis that compareItemCentres sorts on. qsort's comparator can't take extra arguments, so it is
+// passed through this variable. Safe because the BVH is built once, before rendering threads start.
+static int bvh_sort_axis;
+
+static int compareItemCentres(const void *a, const void *b)
+{
+ double ca = ((const struct bvhItem *)a)->centre[bvh_sort_axis];
+ double cb = ((const struct bvhItem *)b)->centre[bvh_sort_axis];
+ return (ca > cb) - (ca < cb);
+}
+
+static struct bvhNode *buildBVHNode(struct bvhItem *items, int n)
+{
+ // Builds the subtree for items[0..n-1] (n >= 1). Groups of at most BVH_LEAF_SIZE objects become a
+ // leaf. Larger groups are sorted along the axis their centres are most spread out on and split in
+ // half by count. Splitting by count (not at the midpoint of the box) means both halves are always
+ // non-empty, so the recursion ends even when many centres coincide.
+ struct bvhNode *node = (struct bvhNode *)calloc(1, sizeof(struct bvhNode));
+ double cmin[3], cmax[3];	// Box around the centres, used to choose the split axis
+ int i, k;
+
+ if (!node)
+ {
+  fprintf(stderr, "buildBVHNode: out of memory\n");
+  exit(1);
+ }
+
+ for (k = 0; k < 3; k++)
+ {
+  node->box.min[k] = cmin[k] = INFINITY;
+  node->box.max[k] = cmax[k] = -INFINITY;
+ }
+ for (i = 0; i < n; i++)
+  for (k = 0; k < 3; k++)
+  {
+   node->box.min[k] = fmin(node->box.min[k], items[i].box.min[k]);
+   node->box.max[k] = fmax(node->box.max[k], items[i].box.max[k]);
+   cmin[k] = fmin(cmin[k], items[i].centre[k]);
+   cmax[k] = fmax(cmax[k], items[i].centre[k]);
+  }
+
+ if (n <= BVH_LEAF_SIZE)
+ {
+  node->n_objs = n;
+  node->objs = (struct object3D **)malloc(n * sizeof(struct object3D *));
+  if (!node->objs)
+  {
+   fprintf(stderr, "buildBVHNode: out of memory\n");
+   exit(1);
+  }
+  for (i = 0; i < n; i++) node->objs[i] = items[i].obj;
+  return node;
+ }
+
+ // Spread of the centres rather than of the node's box: one large object can make the box long on
+ // an axis even when all the centres sit close together on it, and splitting there separates nothing
+ bvh_sort_axis = 0;
+ for (k = 1; k < 3; k++)
+  if (cmax[k] - cmin[k] > cmax[bvh_sort_axis] - cmin[bvh_sort_axis]) bvh_sort_axis = k;
+ qsort(items, n, sizeof(struct bvhItem), compareItemCentres);
+
+ int mid = n / 2;
+ node->left = buildBVHNode(items, mid);
+ node->right = buildBVHNode(items + mid, n - mid);
+ return node;
+}
+
+struct bvhNode *buildBVH(struct object3D *o_list, struct object3D ***unbounded, int *n_unbounded)
+{
+ // Builds a BVH over the objects in o_list and returns its root (NULL if no object has bounds).
+ // Objects objectBounds doesn't know how to bound can't go in the tree; they are returned in
+ // *unbounded (a malloc'd array of *n_unbounded pointers, NULL if there are none) so the caller
+ // can test them against every ray. The objects themselves stay in o_list; the tree only points to them.
+ struct object3D *o;
+ struct bvhItem *items;
+ struct bvhNode *root = NULL;
+ int n = 0, n_items = 0, k;
+
+ for (o = o_list; o != NULL; o = o->next) n++;
+
+ *unbounded = NULL;
+ *n_unbounded = 0;
+ if (n == 0) return NULL;
+
+ items = (struct bvhItem *)malloc(n * sizeof(struct bvhItem));
+ *unbounded = (struct object3D **)malloc(n * sizeof(struct object3D *));
+ if (!items || !*unbounded)
+ {
+  fprintf(stderr, "buildBVH: out of memory\n");
+  exit(1);
+ }
+
+ for (o = o_list; o != NULL; o = o->next)
+ {
+  if (objectBounds(o, &items[n_items].box))
+  {
+   items[n_items].obj = o;
+   for (k = 0; k < 3; k++)
+    items[n_items].centre[k] = (items[n_items].box.min[k] + items[n_items].box.max[k]) / 2;
+   n_items++;
+  }
+  else (*unbounded)[(*n_unbounded)++] = o;
+ }
+
+ if (n_items > 0) root = buildBVHNode(items, n_items);
+ free(items);	// The tree stores object pointers, not items, so these are no longer needed
+
+ if (*n_unbounded == 0)
+ {
+  free(*unbounded);
+  *unbounded = NULL;
+ }
+ return root;
+}
+
+void freeBVH(struct bvhNode *node)
+{
+ // Frees the tree's nodes and leaf arrays. The objects belong to the object list and are not freed.
+ if (!node) return;
+ freeBVH(node->left);
+ freeBVH(node->right);
+ free(node->objs);
+ free(node);
+}
+
+// Closest hit found so far while tracing one ray through the BVH. Each call to bvhFirstHit keeps
+// its own copy on the stack, so rendering threads never share one.
+struct bvhHit {
+ double lambda;			// INFINITY until something is hit
+ struct object3D *obj;
+ struct point3D p, n;
+ double a, b;
+};
+
+static inline int rayHitsBox(const struct aabb *box, const double o[3], const double inv_d[3], double limit, double *t_enter)
+{
+ // Slab test. For each axis the ray is between the box's two planes for t in [t1, t2]; it is inside
+ // the box where all three intervals overlap. Starting the interval at [0, limit] also rejects boxes
+ // behind the ray and boxes that start beyond the closest hit found so far (limit), so those
+ // subtrees get skipped. A zero direction component makes inv_d infinite: the slab is then either
+ // (-inf, inf) or empty, as it should be. If o lies exactly on that slab's plane the product is NaN,
+ // and fmax/fmin ignore NaN, so that axis just doesn't restrict the interval (o is on the box face).
+ double tmin = 0, tmax = limit;
+ int k;
+
+ for (k = 0; k < 3; k++)
+ {
+  double t1 = (box->min[k] - o[k]) * inv_d[k];
+  double t2 = (box->max[k] - o[k]) * inv_d[k];
+  if (t1 > t2)
+  {
+   double tmp = t1;
+   t1 = t2;
+   t2 = tmp;
+  }
+  tmin = fmax(tmin, t1);
+  tmax = fmin(tmax, t2);
+ }
+ if (tmin > tmax) return 0;
+ *t_enter = tmin;
+ return 1;
+}
+
+static inline void bvhTestObject(struct object3D *obj, struct ray3D *ray, struct bvhHit *best)
+{
+ // Intersects ray with one object and keeps the hit if it is the closest so far. Same acceptance
+ // rule as the plain object-list loop: lambda > EPSILON rejects self-intersections at the ray origin.
+ double lambda, a, b;
+ struct point3D p, n;
+
+ obj->intersect(obj, ray, &lambda, &p, &n, &a, &b);
+ if (lambda > EPSILON && lambda < best->lambda)
+ {
+  best->lambda = lambda;
+  best->obj = obj;
+  best->p = p;
+  best->n = n;
+  best->a = a;
+  best->b = b;
+ }
+}
+
+static void bvhVisit(struct bvhNode *node, struct ray3D *ray, const double o[3], const double inv_d[3], struct bvhHit *best)
+{
+ // Visits a node whose box the ray is already known to hit. At an interior node both children may be
+ // hit (their boxes can overlap), so both may need visiting: the nearer one goes first so that any hit
+ // it finds lowers best->lambda, which then often lets the farther one be skipped.
+ if (!node->left)
+ {
+  for (int i = 0; i < node->n_objs; i++) bvhTestObject(node->objs[i], ray, best);
+  return;
+ }
+
+ double t_left, t_right;
+ int hit_left = rayHitsBox(&node->left->box, o, inv_d, best->lambda, &t_left);
+ int hit_right = rayHitsBox(&node->right->box, o, inv_d, best->lambda, &t_right);
+
+ if (hit_left && hit_right)
+ {
+  struct bvhNode *first = node->left, *second = node->right;
+  double t_second = t_right;
+  if (t_right < t_left)
+  {
+   first = node->right;
+   second = node->left;
+   t_second = t_left;
+  }
+  bvhVisit(first, ray, o, inv_d, best);
+  // Nothing in the farther box can be closer than where the ray enters it
+  if (t_second <= best->lambda) bvhVisit(second, ray, o, inv_d, best);
+ }
+ else if (hit_left) bvhVisit(node->left, ray, o, inv_d, best);
+ else if (hit_right) bvhVisit(node->right, ray, o, inv_d, best);
+}
+
+void bvhFirstHit(struct bvhNode *root, struct object3D **unbounded, int n_unbounded, struct ray3D *ray,
+                 double *lambda, struct object3D **obj, struct point3D *p, struct point3D *n, double *a, double *b)
+{
+ // Finds the closest hit (lambda > EPSILON) between ray and the objects in the BVH plus the unbounded
+ // objects, which are tested directly. On a hit, fills in all the outputs. On a miss, sets *lambda = -1
+ // and *obj = NULL and leaves p, n, a, b untouched (as the plain object-list loop did).
+ struct bvhHit best;
+ best.lambda = INFINITY;
+ best.obj = NULL;
+
+ for (int i = 0; i < n_unbounded; i++) bvhTestObject(unbounded[i], ray, &best);
+
+ if (root)
+ {
+  double o[3] = {ray->p0.px, ray->p0.py, ray->p0.pz};
+  double inv_d[3] = {1.0 / ray->d.px, 1.0 / ray->d.py, 1.0 / ray->d.pz};
+  double t_root;
+  if (rayHitsBox(&root->box, o, inv_d, best.lambda, &t_root)) bvhVisit(root, ray, o, inv_d, &best);
+ }
+
+ if (best.obj)
+ {
+  *lambda = best.lambda;
+  *obj = best.obj;
+  *p = best.p;
+  *n = best.n;
+  *a = best.a;
+  *b = best.b;
+ }
+ else
+ {
+  *lambda = -1;
+  *obj = NULL;
+ }
+}
+
 long fibonacci(int n)
 {
  // Returns the nth Fibonacci number, with fibonacci(0) = 0 and fibonacci(1) = 1

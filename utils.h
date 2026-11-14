@@ -240,6 +240,53 @@ void addAreaLight(double sx, double sy, double nx, double ny, double nz,
                   double tx, double ty, double tz, int N,
                   double r, double g, double b, struct object3D **o_list, struct pointLS **l_list);
 
+// Bounding volume hierarchy (BVH) for accelerated intersection testing.
+// All boxes are axis-aligned and in world coordinates. Axes are indexed 0=x, 1=y, 2=z
+// so the build and ray-box code can loop over them.
+struct aabb {
+ double min[3];			// Corner with the smallest x, y, z
+ double max[3];			// Corner with the largest x, y, z
+};
+
+// Build-time record for one object: its world-space box and the box's centre,
+// computed once so they are not recomputed every time the objects get sorted.
+struct bvhItem {
+ struct object3D *obj;
+ struct aabb box;
+ double centre[3];
+};
+
+// A node of the BVH. Interior nodes have both children and no objects; leaves have
+// no children and hold a small array of objects. box always encloses everything below.
+struct bvhNode {
+ struct aabb box;
+ struct bvhNode *left;		// NULL for leaves
+ struct bvhNode *right;		// NULL for leaves
+ struct object3D **objs;	// Leaf only: array of n_objs object pointers (NULL otherwise)
+ int n_objs;			// Leaf only: number of objects in objs (0 otherwise)
+};
+
+// Computes obj's world-space bounding box from its canonical box and T. Returns 1 on success,
+// 0 if obj's type (identified by its intersect function) has no known bounds.
+int objectBounds(struct object3D *obj, struct aabb *box);
+
+// Maximum number of objects in a BVH leaf. Groups larger than this are split in two.
+#define BVH_LEAF_SIZE 2
+
+// Builds a BVH over the objects in o_list and returns its root (NULL if no object has bounds).
+// Objects with no known bounds are returned in *unbounded, a malloc'd array of *n_unbounded
+// pointers (NULL if there are none), and must be tested against every ray separately.
+struct bvhNode *buildBVH(struct object3D *o_list, struct object3D ***unbounded, int *n_unbounded);
+
+// Frees a BVH built by buildBVH. Does not free the objects it points to.
+void freeBVH(struct bvhNode *node);
+
+// Finds the closest intersection (lambda > EPSILON) of ray with the objects in the BVH rooted at root
+// and the n_unbounded objects in unbounded. On a hit, sets *lambda, *obj, *p, *n, *a, *b; on a miss,
+// sets *lambda = -1 and *obj = NULL. Safe to call from several threads at once.
+void bvhFirstHit(struct bvhNode *root, struct object3D **unbounded, int n_unbounded, struct ray3D *ray,
+                 double *lambda, struct object3D **obj, struct point3D *p, struct point3D *n, double *a, double *b);
+
 // Fibonacci word fractal helpers. fibonacci(n) is the nth Fibonacci number (fibonacci(0) = 0,
 // fibonacci(1) = 1). fibonacciWord(n, word) writes the nth Fibonacci word (0, 01, 010, 01001, ...)
 // into word, which needs room for fibonacci(n+2) characters plus the null terminator.

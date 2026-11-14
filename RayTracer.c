@@ -55,6 +55,12 @@ struct pointLS *light_list;
 struct textureNode *texture_list;
 int MAX_DEPTH;
 
+// Bounding volume hierarchy over object_list, built once after the scene is set up and read-only
+// while rendering. Objects without known bounds are kept in bvh_unbounded and tested on every ray.
+struct bvhNode *bvh_root;
+struct object3D **bvh_unbounded;
+int bvh_n_unbounded;
+
 // Ambient light intensity. Kept at white so an ambient albedo of 1 gives the flat object colour.
 static const struct colourRGB ambient_light = {1, 1, 1};
 
@@ -344,30 +350,9 @@ void findFirstHit(struct ray3D *ray, double *lambda, struct object3D *Os, struct
  // Os is intentionally unused: self-intersections are rejected by the temp_lambda > EPSILON check instead.
  // Skipping Os entirely would break cases where a ray must hit its source object again (e.g. refraction
  // exiting a sphere, self-shadowing, or non-convex objects).
- *lambda = -1;
- *obj = NULL;
- struct object3D *node = object_list;
- while (node != NULL)
- {
-   double temp_lambda;
-   struct point3D temp_p;
-   struct point3D temp_n;
-   double temp_a;
-   double temp_b;
-   node->intersect(node, ray, &temp_lambda, &temp_p, &temp_n, &temp_a, &temp_b);
-
-   if (temp_lambda > EPSILON && (*lambda == -1 || temp_lambda < *lambda))
-   {
-     *lambda = temp_lambda;
-     *obj = node;
-     *p = temp_p;
-     *n = temp_n;
-     *a = temp_a;
-     *b = temp_b;
-   }
-
-   node = node->next;
- }
+ // The BVH only changes which objects get tested: it skips those whose bounding boxes the ray misses
+ // or reaches only beyond the closest hit found so far.
+ bvhFirstHit(bvh_root, bvh_unbounded, bvh_n_unbounded, ray, lambda, obj, p, n, a, b);
 }
 
 void rayTrace(struct ray3D *ray, int depth, struct colourRGB *col, struct object3D *Os)
@@ -548,6 +533,9 @@ int main(int argc, char *argv[])
  buildScene();		// Create a scene. This defines all the
 			// objects in the world of the raytracer
 
+ // Build the BVH now that every object has its final transform. It must exist before any rays are traced.
+ bvh_root = buildBVH(object_list, &bvh_unbounded, &bvh_n_unbounded);
+
  //////////////////////////////////////////
  // TO DO: For Assignment 2 you can use the setup
  //        already provided here. For Assignment 3
@@ -604,6 +592,8 @@ int main(int argc, char *argv[])
  if (cam==NULL)
  {
   fprintf(stderr,"Unable to set up the view and camera parameters. Our of memory!\n");
+  freeBVH(bvh_root);
+  free(bvh_unbounded);
   cleanup(object_list,light_list, texture_list);
   deleteImage(im);
   exit(0);
@@ -662,6 +652,8 @@ int main(int argc, char *argv[])
  imageOutput(im,output_name);
 
  // Exit section. Clean up and return.
+ freeBVH(bvh_root);					// BVH (before the objects it points to)
+ free(bvh_unbounded);
  cleanup(object_list,light_list,texture_list);		// Object, light, and texture lists
  deleteImage(im);					// Rendered image
  free(cam);						// camera view
